@@ -1,0 +1,57 @@
+# ============================================
+# Fsf-care — فایل‌های نادیده‌گرفته‌شده توسط گیت
+# ============================================
+
+# --- اطلاعات حساس کاربران (هشدار: هرگز پوش نشود) ---
+backend/auth/
+backend/auth/users.json
+
+# --- داده‌های پروژه‌ها و عکس‌های کاربران ---
+backend/projects/
+backend/uploads/
+
+# --- گزارش‌ها و خروجی تست ---
+*.log
+backend/*.log
+*.pdf
+test_report.pdf
+
+# --- اسکرین‌شات‌های تست CDP ---
+t_*.jpg
+t_*.png
+*.screenshot.jpg
+
+# --- کش و کامپایل ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+node_modules/
+
+# --- تنظیمات محلی و IDE ---
+.env
+.env.*
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# --- فایل‌های موقت سیستم ---
+*.tmp
+*.bak
+*.orig
+
+# --- تنظیمات Task Scheduler محلی این سرور ---
+restart_as_system.ps1
+restart_server.ps1
+restart_tasks.ps1
+trigger_restart.ps1
+diag_tasks.ps1
+diag2.ps1
+check_port.ps1
+watchdog.log

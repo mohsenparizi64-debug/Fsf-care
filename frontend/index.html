@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1a7f37">
+<title>Buildup Tracker — سنجش تغییر</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:Tahoma,sans-serif;margin:0;background:#f2f4f3;color:#222;padding-bottom:env(safe-area-inset-bottom)}
+header{background:#1a7f37;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px}
+header h1{margin:0;font-size:18px;flex:1}
+header .who{font-size:12px;opacity:.9}
+header .who button{background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
+main{max-width:640px;margin:0 auto;padding:0 12px 12px}
+.card{background:#fff;border:1px solid #e1e4e2;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.tab{display:none}.tab.on{display:block}
+.muted{color:#666;font-size:12.5px;line-height:1.9}
+input[type=text],input[type=password],input[type=number],select{width:100%;font-size:15px;padding:10px;border:1px solid #ccc;border-radius:10px;margin-top:4px}
+button.primary{background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:bold;cursor:pointer;min-height:52px}
+button.go{width:100%;background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:15px;font-size:18px;font-weight:bold;cursor:pointer;margin-top:12px;min-height:54px}
+button.secondary{background:#e8edea;color:#222;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;min-height:50px}
+button.warn{background:#b42318;color:#fff;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;min-height:50px}
+.row{display:flex;gap:8px;margin-top:10px}.row button{flex:1}
+#err{color:#b42318;font-weight:bold;min-height:20px}
+/* دوربین */
+#stage{position:relative;width:100%;background:#000;border-radius:12px;overflow:hidden;touch-action:none}
+#stage video{width:100%;display:block;aspect-ratio:3/4;object-fit:cover;transform-origin:center}
+#stage canvas#grid{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#stage img#ghost{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4;pointer-events:none;display:none;transform-origin:center}
+label.sl{display:block;font-size:14px;margin:12px 0 2px}
+input[type=range]{width:100%;min-height:44px}
+.slots{display:flex;gap:8px;margin-top:10px}
+.slot{flex:1;border:2px solid #ddd;border-radius:12px;overflow:hidden;text-align:center;font-size:13px;background:#fafafa}
+.slot.sel{border-color:#1a7f37}
+.slot img{width:100%;max-height:170px;object-fit:cover;display:block}
+.slot p{margin:6px 4px}
+table{border-collapse:collapse;width:100%;margin-top:8px;font-size:14px}
+td,th{border:1px solid #e0e0e0;padding:8px 6px;text-align:center}
+th{background:#f6f8f7}
+img.result{width:100%;border-radius:10px;border:1px solid #ddd}
+#st{text-align:center;color:#1a7f37;font-weight:bold}
+b.pos{color:#1a7f37}b.neg{color:#b42318}
+/* گالری */
+.tl{display:flex;flex-direction:column;gap:10px}
+.tl-item{display:flex;gap:10px;align-items:flex-start;background:#fff;border:1px solid #e1e4e2;border-radius:12px;padding:8px}
+.tl-item img{width:96px;height:120px;object-fit:cover;border-radius:8px;flex:none;cursor:pointer}
+.tl-item.pick{outline:3px solid #1a7f37;outline-offset:1px}
+.tl-item.approved{border-color:#1a7f37;border-width:2px}
+.tl-meta{flex:1;font-size:13px;min-width:0}
+.tl-meta .dt{font-weight:bold;font-size:14px}
+.tl-meta .mini{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.tl-meta .mini button{padding:8px 6px;font-size:12px;border-radius:8px;border:1px solid #1a7f37;background:#fff;color:#1a7f37;cursor:pointer;font-weight:bold}
+.tl-meta .mini button.warnb{border-color:#b42318;color:#b42318}
+.tl-meta .mini button.okb{border-color:#b8860b;color:#b8860b}
+.badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:8px;font-weight:bold}
+.badge.on{background:#1a7f37;color:#fff}
+.badge.off{background:#e8edea;color:#666}
+.proj-bar{display:flex;gap:8px;align-items:flex-end}
+.proj-bar select{flex:1}
+.proj-bar .secondary{flex:none;white-space:nowrap}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:50;align-items:center;justify-content:center;padding:16px}
+#lightbox.on{display:flex;flex-direction:column}
+#lightbox img{max-width:100%;max-height:80vh;border-radius:10px}
+#lightbox p{color:#fff;font-size:13px}
+/* کامنت‌ها */
+.cmt{background:#f6f8f7;border-radius:8px;padding:6px 8px;margin-top:4px;font-size:12.5px}
+.cmt b{color:#1a7f37}
+.cmt .del{color:#b42318;cursor:pointer;font-size:11px;float:left}
+/* ماتریس دسترسی */
+.perm-grid{display:grid;grid-template-columns:1fr auto;gap:4px 8px;font-size:13px;margin-top:6px}
+.perm-grid label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.switch{position:relative;width:42px;height:24px;background:#ccc;border-radius:12px;transition:.2s;cursor:pointer;flex:none}
+.switch.on{background:#1a7f37}
+.switch::after{content:'';position:absolute;top:3px;right:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s}
+.switch.on::after{right:21px}
+/* جدول ماتریس دسترسی — اسکرول افقی روی موبایل */
+.perm-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #e1e4e2;border-radius:10px}
+.perm-table-wrap table{min-width:560px;font-size:12px}
+.perm-table-wrap th{position:sticky;top:0;background:#f0f3f1;z-index:1}
+/* ادمین: کارت‌های کنار هم روی دسکتاپ، زیر هم روی موبایل */
+#p4 .card{margin:10px 0}
+@media(min-width:900px){
+ #p4{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;align-items:start}
+ #p4 .card{margin:0}
+}
+/* سوئیچ‌ها و دکمه‌ها روی موبایل بزرگ‌تر */
+@media(max-width:520px){
+ header{flex-wrap:wrap;padding:10px 12px}
+ header h1{font-size:16px}
+ .tl-item{flex-direction:column;gap:8px}
+ .tl-item img{width:100%;height:170px}
+ .tl-meta .mini button{flex:1;padding:10px 6px;font-size:13px}
+ #p4 .row{flex-wrap:wrap}
+ #p4 .row>input,#p4 .row>button,#p4 .row>label{flex:1 1 45%}
+ .proj-bar{flex-wrap:wrap}
+ .proj-bar select{flex:1 1 100%}
+ .proj-bar .secondary{flex:1}
+}
+/* دوربین تمام‌صفحه */
+#camFullscreen{position:fixed;inset:0;z-index:200;background:#000;display:none}
+#camFullscreen.on{display:flex;flex-direction:column}
+#camTopbar{position:static;padding:calc(env(safe-area-inset-top) + 8px) 12px 8px;display:flex;gap:8px;align-items:center;z-index:5;
+ background:linear-gradient(180deg,rgba(0,0,0,.6),rgba(0,0,0,0))}
+#camStage{flex:1;display:flex;align-items:center;justify-content:center;position:relative;min-height:0;overflow:visible}
+#captureBox{position:relative;flex:none;background:#0a0a0a;overflow:hidden;border-radius:6px;box-shadow:0 0 0 1px rgba(255,255,255,.18);transform-origin:center}
+#captureBox video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform-origin:center}
+#captureBox img#ghostF{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.45;pointer-events:none;display:none}
+#captureBox canvas#gridF{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#shutter.off{opacity:.32;background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.4)}
+#camTopbar{position:absolute;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top) + 10px) 12px 12px;display:flex;gap:8px;align-items:center;z-index:5;
+ background:linear-gradient(180deg,rgba(0,0,0,.55),rgba(0,0,0,0))}
+#camTopbar .cfbtn{background:rgba(0,0,0,.55);color:#fff;border:0;border-radius:20px;padding:9px 14px;font-size:14px;font-weight:bold;cursor:pointer;backdrop-filter:blur(4px)}
+#camTopbar .cfbtn.warn{background:rgba(180,35,24,.85)}
+#camTopbar .projname{color:#fff;font-size:13px;font-weight:bold;flex:1;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+/* پنل پایین: شاتر + اسلایدرها (در جریان flex، غیر از absolute) */
+#camDrawer{position:relative;z-index:6;
+ background:linear-gradient(0deg,rgba(0,0,0,.92),rgba(0,0,0,.7));
+ padding:8px 10px calc(env(safe-area-inset-bottom) + 10px)}
+/* پلاگین‌های روی تصویر — نسبت به stage */
+#camToolRow{position:absolute;left:10px;right:10px;bottom:6px;z-index:7;
+ display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none;
+ opacity:.92;pointer-events:auto}
+#camToolRow::-webkit-scrollbar{display:none}
+/* پلاگین صحنه‌ها — گوشه پایین چپ، بالای ردیف ابزار */
+#camSceneRow{position:absolute;left:10px;bottom:44px;z-index:7;
+ display:flex;gap:6px;flex-wrap:wrap;max-width:70%;pointer-events:auto}
+/* پلاگین سوییچ‌ها (گرید/شبه) — گوشه پایین راست */
+#camToggleRow{position:absolute;right:10px;bottom:44px;z-index:7;
+ display:flex;gap:6px;flex-direction:column;align-items:flex-end;pointer-events:auto}
+/* اسلایدرها — کلاس باز/بسته */
+#camSliders{max-height:0;overflow:hidden;transition:max-height .18s ease;margin-top:0;display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+#camSliders::-webkit-scrollbar{display:none}
+#camSliders.open{max-height:150px;overflow-y:auto;margin-top:8px}
+#camDrawer .toolrow{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+#camDrawer .toolrow::-webkit-scrollbar{display:none}
+#camDrawer .tbtn.on{background:#1a7f37}
+#camDrawer .tbtn.warn{background:rgba(180,35,24,.8)}
+#camDrawer .sliders{display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;scrollbar-width:none}
+#camDrawer .sliders::-webkit-scrollbar{display:none}
+#camDrawer .sbox{flex:none;min-width:130px;background:rgba(0,0,0,.55);border-radius:12px;padding:8px 10px}
+#camDrawer .sbox label{color:#eee;font-size:11px;display:flex;justify-content:space-between;margin-bottom:2px}
+#camDrawer input[type=range]{min-height:36px;accent-color:#4caf50}
+#camDrawer select{width:100%;font-size:12px;padding:5px 6px;border-radius:8px;border:1px solid rgba(255,255,255,.3);background:rgba(0,0,0,.5);color:#fff}
+#camDrawer select option{color:#222}
+/* دکمه شاتر — حداقل ۴۴px (Apple HIG / WCAG AAA) */
+#shutterRow{display:flex;align-items:center;justify-content:space-between;gap:10px;position:relative;z-index:9}
+#camToolsBtn{width:52px;height:52px;border-radius:50%;font-size:19px;padding:0;display:flex;align-items:center;justify-content:center;flex:none}
+#shutter{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.25);cursor:pointer;flex:none;backdrop-filter:blur(4px);transition:.15s;position:relative;z-index:10}
+#shutter:active{transform:scale(.92);background:rgba(255,255,255,.5)}
+#shutter.busy{opacity:.5;pointer-events:none}
+#camHint{color:#eee;font-size:12px;flex:1;text-align:center;text-shadow:0 1px 3px rgba(0,0,0,.8)}
+#camToolMsgF{color:#ffe082;font-size:12px;text-align:center;margin-top:6px;min-height:16px;text-shadow:0 1px 3px rgba(0,0,0,.9)}
+/* سوئیچ‌های ابزار — حداقل ۴۴px لمسی */
+.camtoggle{display:flex;align-items:center;gap:6px;color:#fff;font-size:11.5px;cursor:pointer;flex:none;background:rgba(0,0,0,.4);border-radius:14px;padding:7px 10px;min-height:44px;min-width:44px;justify-content:center}
+.camtoggle input{accent-color:#4caf50;width:16px;height:16px}
+#camDrawer .tbtn{flex:none;min-height:44px;background:rgba(0,0,0,.6);color:#fff;border:1px solid rgba(255,255,255,.16);border-radius:20px;padding:8px 14px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;backdrop-filter:blur(6px);display:flex;align-items:center}
+</style>
+</head>
+<body>
+<!-- ===== صفحه لاگین ===== -->
+<div id="loginPage" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:#1a7f37">
+ <div style="background:#fff;border-radius:16px;padding:24px;width:min(380px,92vw)">
+  <h2 style="text-align:center;color:#1a7f37;margin:0 0 6px">📷 Buildup Tracker</h2>
+  <p class="muted" style="text-align:center">برای ورود نام کاربری و رمز عبور را وارد کنید</p>
+  <label class="sl">نام کاربری:</label><input type="text" id="liUser" autocomplete="username">
+  <label class="sl">رمز عبور:</label><input type="password" id="liPass" autocomplete="current-password">
+  <p id="err"></p>
+  <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:6px;cursor:pointer"><input type="checkbox" id="liRemember" style="width:18px;height:18px;accent-color:#1a7f37"> مرا به خاطر بسپار</label>
+  <button class="go" onclick="doLogin()">ورود</button>
+ </div>
+</div>
+
+<div id="app" style="display:none">
+<header><h1>📷 Buildup Tracker</h1><span class="who" id="whoBox"></span></header><nav style="display:flex;gap:8px;padding:10px 12px 0;max-width:640px;margin:0 auto">
+<button id="t1" class="on" style="flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(1)">دوربین</button>
+<button id="t2" style="flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(2)">گالری</button>
+<button id="t3" style="flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(3)">تحلیل</button>
+<button id="t4" style="display:none;flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(4)">👤 ادمین</button>
+</nav>
+<main>
+<!-- ===== TAB 1: CAMERA ===== -->
+<div id="p1" class="tab on">
+<div class="card">
+<div class="proj-bar">
+<div style="flex:1">
+<label class="sl" style="margin-top:0">پروژه (الزامی قبل از تصویربرداری):</label>
+<select id="projSel" onchange="onProjectChange()"><option value="">— پروژه را انتخاب کن —</option></select>
+</div>
+<button class="secondary" onclick="newProjectToggle()">➕ جدید</button>
+</div>
+<div id="newProjBox" style="display:none">
+<label class="sl">نام پروژه جدید:</label>
+<input type="text" id="newProj" placeholder="مثلاً: قندیل شماره ۱">
+<div class="row"><button class="primary" onclick="createProject()">ساخت پروژه</button></div>
+</div>
+<p id="projmsg" class="muted"></p>
+</div>
+<div class="card">
+<p class="muted" style="margin-top:0">با زدن «شروع دوربین»، دوربین تمام‌صفحه با گرید و شبه تصویر مرجع و همه ابزارها باز می‌شود. هر عکس ثبت‌شده خودکار در گالری پروژه ذخیره می‌شود و دوربین برای عکس بعدی آماده می‌ماند.</p>
+<div class="row">
+<button class="go" onclick="openCam()">📸 شروع دوربین</button>
+</div>
+</div>
+</div>
+<!-- ===== کادر تمام‌صفحه دوربین ===== -->
+<div id="camFullscreen" class="">
+ <div id="camStage">
+  <div id="captureBox">
+   <video id="videoF" playsinline muted autoplay></video>
+   <img id="ghostF" crossorigin="anonymous">
+   <canvas id="gridF"></canvas>
+  </div>
+  <!-- پلاگین‌های روی تصویر (داخلی از stage) -->
+  <div id="camToolRow"></div>
+  <div id="camSceneRow"></div>
+  <div id="camToggleRow"></div>
+ </div>
+ <!-- نوار بالا: فقط دکمه خروج -->
+ <div id="camTopbar">
+  <button class="cfbtn warn" id="closeCam" onclick="closeCam()">✖</button>
+  <span class="projname" id="camProjName"></span>
+ </div>
+ <!-- پنل پایین: شاتر + اسلایدرها -->
+ <div id="camDrawer">
+  <div id="shutterRow">
+   <div class="camtoggle"><input type="checkbox" id="gridToggleF" checked onchange="drawGrid()"> گرید</div>
+   <button id="camToolsBtn" class="tbtn" onclick="toggleSlidersF()">⚙ تنظیمات</button>
+   <button id="shutter" onclick="shootF()"></button>
+   <div class="camtoggle"><input type="checkbox" id="ghostToggleF" onchange="toggleGhostF()"> شبه</div>
+  </div>
+  <div id="camSliders"></div>
+  <p id="camToolMsgF"></p>
+ </div>
+</div>
+<!-- ===== TAB 2: GALLERY ===== -->
+<div id="p2" class="tab">
+<div class="card">
+<h3 style="margin-top:0">گالری پروژه</h3>
+<div class="proj-bar">
+<div style="flex:1">
+<label class="sl" style="margin-top:0">پروژه:</label>
+<select id="projSelG" onchange="loadGallery()"><option value="">— انتخاب —</option></select>
+</div>
+<button class="secondary" onclick="loadGallery()">🔄 به‌روزرسانی</button>
+</div>
+<p class="muted">عکس‌ها با تاریخ و ساعت شمسی ثبت شده‌اند. با زدن دکمه «انتخاب برای گزارش» دو عکس را مشخص کن (مرجع و دوم)، سپس «تهیه گزارش PDF» را بزن.</p>
+<div class="row" style="margin-top:0;margin-bottom:8px">
+ <label style="display:flex;align-items:center;gap:6px;font-size:13px;flex:none"><input type="checkbox" id="showGridOv" checked onchange="loadGallery()"> نمایش گرید روی عکس‌ها</label>
+</div>
+<div id="gallery" class="tl"></div>
+<div id="reportBar" style="display:none">
+ <div class="row" style="margin-top:12px">
+  <button class="primary" id="mkReportBtn" onclick="makeReport()">📄 تهیه گزارش PDF</button>
+ </div>
+ <p class="muted" id="reportInfo"></p>
+</div>
+</div>
+</div>
+<!-- ===== TAB 3: ANALYZE ===== -->
+<div id="p3" class="tab">
+<div class="card">
+<h3 style="margin-top:0">عکس‌های تحلیل</h3>
+<div class="slots">
+<div class="slot" id="sB"><img id="iB" style="display:none"><p>مرجع: <span id="lB">—</span></p></div>
+<div class="slot" id="sA"><img id="iA" style="display:none"><p>دوم: <span id="lA">—</span></p></div>
+</div>
+<p class="muted">یا از گالری/دوربین گوشی انتخاب کن (بدون نیاز به HTTPS):</p>
+<label>عکس مرجع: <input type="file" id="fB" accept="image/*" capture="environment"></label>
+<label>عکس دوم: <input type="file" id="fA" accept="image/*" capture="environment"></label>
+<label>پیکسل بر میلی‌متر (اختیاری): <input id="ppm" type="number" step="any" value="0" inputmode="decimal"></label>
+<button class="go" onclick="go()">تحلیل تغییر</button>
+<p id="st"></p>
+</div>
+<div class="card" id="out" style="display:none">
+<h3 style="margin-top:0">نتیجه</h3>
+<div id="sum"></div>
+<h4>رشد جهتی (٪)</h4>
+<table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr><tbody id="tb"></tbody></table>
+<h4>تصویر تطبیقی <span class="muted">(آبی=مرجع، قرمز=دوم)</span></h4>
+<img id="ov" class="result">
+<p class="muted" id="note"></p>
+</div>
+</div>
+<!-- ===== TAB 4: ADMIN ===== -->
+<div id="p4" class="tab">
+<div class="card">
+<h3 style="margin-top:0">👤 مدیریت کاربران و دسترسی‌ها</h3>
+<p class="muted" style="margin-top:0">هر دسترسی را با کلید on/off برای هر کاربر تنظیم کن. ادمین همه دسترسی‌ها را دارد.</p>
+<div id="userPermGrid"></div>
+<div class="row" style="margin-top:12px">
+<input type="text" id="nu" placeholder="نام کاربری جدید" style="flex:2">
+<input type="password" id="np" placeholder="رمز عبور" style="flex:2">
+<button class="secondary" id="naBtn" style="flex:1" onclick="addUserBtn()">➕ افزودن</button>
+</div>
+<div class="row">
+<label style="flex:2;font-size:13px;display:flex;align-items:center;gap:6px"><input type="checkbox" id="nAdmin"> ادمین</label>
+</div>
+<p id="adminMsg" class="muted"></p>
+</div>
+<div class="card">
+<h3 style="margin-top:0">📁 مدیریت پروژه‌ها</h3>
+<div id="projAdminList"></div>
+</div>
+<div class="card">
+<h3 style="margin-top:0">تغییر رمز عبور خودم</h3>
+<input type="password" id="op" placeholder="رمز فعلی">
+<input type="password" id="npw" placeholder="رمز جدید">
+<button class="go" onclick="changeMyPassword()">تغییر رمز</button>
+</div>
+</div>
+</main>
+</div>
+<div id="lightbox" onclick="this.classList.remove('on')"><img id="lbImg"><p id="lbCap"></p></div>
+<script>
+/* ===== لاگین و دسترسی‌ها ===== */
+let TOKEN=null, IS_ADMIN=false, ME=null, PERMS={};
+const api=(u,o={})=>fetch(u,{...o,headers:{'Authorization':TOKEN?'Bearer '+TOKEN:'',...(o.headers||{})}});
+const fa=n=>n.toLocaleString('fa-IR');
+const can=(k)=>IS_ADMIN||!!(PERMS&&PERMS[k]);
+function showApp(){document.getElementById('loginPage').style.display='none';document.getElementById('app').style.display='block';}
+function showLogin(){document.getElementById('loginPage').style.display='flex';document.getElementById('app').style.display='none';}
+function tab(n){
+ for(let i=1;i<=4;i++){
+  const p=document.getElementById('p'+i),b=document.getElementById('t'+i);
+  if(!p)continue;
+  p.classList.toggle('on',i===n);
+  if(b)b.classList.toggle('on',i===n);
+ }
+ if(n===2)loadGallery();
+ if(n===4&&can('manage_users'))loadUsers();
+}
+async function doLogin(){
+ const u=document.getElementById('liUser').value.trim(),p=document.getElementById('liPass').value;
+ if(!u||!p){document.getElementById('err').textContent='هر دو فیلد را پر کنید';return;}
+ const remember=document.getElementById('liRemember').checked;
+ try{
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p,remember:remember})});
+  const j=await r.json();
+  if(!r.ok){document.getElementById('err').textContent=j.detail||'خطا در ورود';return;}
+  TOKEN=j.token;IS_ADMIN=!!j.is_admin;ME=j.username;PERMS=j.perms||{};
+  if(remember){localStorage.setItem('bt_remember',u);}
+  sessionStorage.setItem('bt_token',TOKEN);
+  enterApp();
+ }catch(e){document.getElementById('err').textContent='خطای ارتباط با سرور';}
+}
+function enterApp(){
+ showApp();
+ document.getElementById('whoBox').innerHTML=(ME?ME:'')+' <button onclick="doLogout()">خروج</button>';
+ document.getElementById('t4').style.display=can('manage_users')?'block':'none';
+ drawGrid();refreshProjectLists();
+ if(can('manage_users'))loadUsers();
+}
+function doLogout(){
+ sessionStorage.removeItem('bt_token');TOKEN=null;IS_ADMIN=false;ME=null;PERMS={};
+ localStorage.removeItem('bt_remember');
+ try{fetch('/api/logout',{method:'POST',headers:{'Authorization':''}});}catch(e){}
+ closeCam();
+ showLogin();
+}
+async function checkSession(){
+ // یادآوری نام کاربری
+ const remembered=localStorage.getItem('bt_remember');
+ if(remembered){document.getElementById('liUser').value=remembered;document.getElementById('liRemember').checked=true;}
+ const t=sessionStorage.getItem('bt_token');
+ if(!t){showLogin();return;}
+ TOKEN=t;
+ try{
+  const r=await api('/api/me');const j=await r.json();
+  if(j.ok){TOKEN=t;IS_ADMIN=!!j.is_admin;ME=j.username;PERMS=j.perms||{};enterApp();}
+  else{sessionStorage.removeItem('bt_token');showLogin();}
+ }catch(e){showLogin();}
+}
+/* ===== ادمین: کاربران و ماتریس دسترسی ===== */
+let PERM_KEYS=[];
+async function loadUsers(){
+ try{
+  const [ru,rp]=await Promise.all([api('/api/users'),api('/api/perms')]);
+  const ju=await ru.json(),jp=await rp.json();
+  if(!ju.ok)return;
+  PERM_KEYS=jp.ok?jp.perms:[];
+  renderPermGrid(ju.users);
+  if(IS_ADMIN)loadProjectsAdmin();
+ }catch(e){}
+}
+function renderPermGrid(users){
+ const box=document.getElementById('userPermGrid');
+ const keys=PERM_KEYS.map(k=>k.key);
+ let h=`<div class="perm-table-wrap"><table><tr><th style="position:sticky;left:0;background:#f0f3f1;z-index:2">کاربر</th>${PERM_KEYS.map(k=>`<th style="writing-mode:vertical-rl">${k.label}</th>`).join('')}<th>عملیات</th></tr>`;
+ for(const u of users){
+  h+=`<tr><td style="position:sticky;left:0;background:#fff;z-index:2;min-width:88px"><b>${u.username}</b><br><span class="badge ${u.is_admin?'on':'off'}">${u.is_admin?'ادمین':'کاربر'}</span></td>`;
+  if(u.is_admin){
+   h+=keys.map(()=>`<td style="color:#1a7f37">✓</td>`).join('');
+  }else{
+   for(const k of keys){
+    const on=!!(u.perms&&u.perms[k]);
+    h+=`<td><div class="switch ${on?'on':''}" onclick="togglePerm('${u.username}','${k}')"></div></td>`;
+   }
+  }
+  h+=`<td>${u.username==='admin'?'—':`<button class="warn" style="padding:6px 8px;font-size:11px" onclick="delUser('${u.username}')">حذف</button>`}</td></tr>`;
+ }
+ box.innerHTML=h+'</table></div>';
+}
+async function togglePerm(username,key){
+ try{
+  const r=await api('/api/users');const j=await r.json();
+  const u=j.users.find(x=>x.username===username);
+  if(!u)return;
+  const perms={...(u.perms||{})};
+  perms[key]=!perms[key];
+  const rr=await api('/api/users/'+encodeURIComponent(username)+'/perms',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(perms)});
+  if(!rr.ok){alert('خطا در تنظیم دسترسی');}
+  loadUsers();
+ }catch(e){alert('خطای ارتباط');}
+}
+async function addUserBtn(){
+ const u=document.getElementById('nu').value.trim(),p=document.getElementById('np').value;
+ if(!u||!p){document.getElementById('adminMsg').textContent='نام کاربری و رمز را وارد کنید';return;}
+ const isA=document.getElementById('nAdmin').checked;
+ try{
+  const r=await api('/api/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p,is_admin:isA})});
+  const j=await r.json();
+  if(!r.ok){document.getElementById('adminMsg').textContent=j.detail||'خطا';return;}
+  document.getElementById('nu').value='';document.getElementById('np').value='';
+  document.getElementById('adminMsg').textContent='✅ یوزر ساخته شد';
+  loadUsers();
+ }catch(e){document.getElementById('adminMsg').textContent='خطای ارتباط';}
+}
+async function delUser(u){
+ if(!confirm('حذف کاربر '+u+'؟'))return;
+ try{
+  const r=await api('/api/users/'+encodeURIComponent(u),{method:'DELETE'});
+  const j=await r.json();
+  document.getElementById('adminMsg').textContent=j.ok?'✅ حذف شد':'خطا در حذف';
+  loadUsers();
+ }catch(e){}
+}
+async function changeMyPassword(){
+ const o=document.getElementById('op').value,n=document.getElementById('npw').value;
+ if(!o||!n){alert('هر دو رمز را وارد کنید');return;}
+ try{
+  const r=await api('/api/password',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({old_password:o,new_password:n})});
+  const j=await r.json();
+  alert(r.ok&&j.ok?'✅ رمز عوض شد':'❌ رمز قدیمی اشتباه است');
+ }catch(e){alert('خطای ارتباط');}
+}
+/* ===== ادمین: مدیریت پروژه‌ها ===== */
+async function loadProjectsAdmin(){
+ try{
+  const r=await api('/api/projects');const j=await r.json();
+  if(!j.ok)return;
+  const box=document.getElementById('projAdminList');
+  if(!j.projects.length){box.innerHTML='<p class="muted">هنوز پروژه‌ای ساخته نشده.</p>';return;}
+  box.innerHTML=j.projects.map(p=>`
+   <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-top:1px solid #eee;padding:8px 0">
+    <div style="flex:1 1 55%;min-width:140px"><b>${p.name}</b><br><span class="muted">${fa(p.photo_count)} عکس</span></div>
+    <button class="secondary" style="padding:8px 12px;font-size:13px" onclick="renameProject('${p.name.replace(/'/g,"\\'")}')">✏️ تغییر نام</button>
+    <button class="warn" style="padding:8px 12px;font-size:13px" onclick="deleteProject('${p.name.replace(/'/g,"\\'")}')">🗑 حذف</button>
+   </div>`).join('');
+ }catch(e){}
+}
+async function renameProject(old){
+ const nw=prompt('نام جدید پروژه «'+old+'»:',old);
+ if(!nw||nw===old)return;
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(old),{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:nw})});
+  if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||''));return;}
+  await refreshProjectLists();loadProjectsAdmin();
+ }catch(e){alert('خطای ارتباط');}
+}
+async function deleteProject(name){
+ if(!confirm('حذف پروژه «'+name+'» و همه عکس‌های آن؟ قابل بازگشت نیست.'))return;
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(name),{method:'DELETE'});
+  if(!r.ok){alert('خطا در حذف');return;}
+  await refreshProjectLists();loadProjectsAdmin();
+ }catch(e){alert('خطای ارتباط');}
+}
+/* ===== دوربین تمام‌صفحه ===== */
+let gridN=6, stream=null, face='environment', zoom=1, zoomCaps=null, camOpen=false;
+let camCapsCache=null, curScene='normal', torchOn=false, camBusy=false;
+const store={before:null,after:null};
+let pick={ref:null,other:null};
+
+function currentProject(){const s=document.getElementById('projSel');return s?(s.value||'').trim():'';}
+function onProjectChange(){const v=currentProject();document.getElementById('projmsg').textContent=v?'پروژه فعال: '+v:'';}
+function newProjectToggle(){const box=document.getElementById('newProjBox');box.style.display=(box.style.display==='none')?'block':'none';if(box.style.display==='block')document.getElementById('newProj').focus();}
+
+async function openCam(){
+ const proj=currentProject();
+ if(!proj){document.getElementById('projmsg').textContent='⚠️ اول پروژه را انتخاب کن یا بساز!';tab(1);return;}
+ if(!can('camera')){alert('شما دسترسی تصویربرداری ندارید');return;}
+ if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+  alert('⚠️ دوربین زنده روی اتصال غیرامن (HTTP) در دسترس نیست. باید از لینک HTTPS استفاده کنی.');
+  return;
+ }
+ document.getElementById('camProjName').textContent=proj;
+ document.getElementById('camFullscreen').classList.add('on');
+ camOpen=true;
+ buildCamTools();updateShutterLock();layoutBox();
+ try{
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:face,width:{ideal:1280}},audio:false});
+  const v=document.getElementById('videoF');v.srcObject=stream;
+  v.onloadedmetadata=()=>{drawGrid();detectCaps();};
+ }catch(e){
+  document.getElementById('camToolMsgF').textContent='⚠️ دسترسی به دوربین ممکن نشد: '+e.message;
+ }
+ setTimeout(layoutBox,100);
+}
+function closeCam(){
+ camOpen=false;
+ document.getElementById('camFullscreen').classList.remove('on');
+ setZoomD(1);
+ if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+}
+function toggleGhostF(){
+ const g=document.getElementById('ghostF');
+ if(document.getElementById('ghostToggleF').checked){
+  const r=localStorage.getItem('bt_ref');
+  if(r){g.src=r;g.style.display='block';camMsg('🟡 کادر زرد = قاب شبه — تصویر زنده را داخل آن منطبق کن');}
+  else{document.getElementById('ghostToggleF').checked=false;alert('هنوز فریم مرجعی ثبت نشده. اول یک عکس بگیر و از گالری به‌عنوان مرجع انتخاب کن.');}
+ }else{g.style.display='none';}
+ drawGrid();updateShutterLock();
+}
+/* --- تشخیص قابلیت‌های دوربین --- */
+function detectCaps(){
+ try{
+  const ts=stream&&stream.getVideoTracks();
+  if(!ts||!ts.length)return;
+  camCapsCache=ts[0].getCapabilities();
+  if(camCapsCache&&camCapsCache.zoom)zoomCaps=camCapsCache;
+  buildCamTools();
+ }catch(e){camCapsCache=null;}
+}
+function caps(){return camCapsCache||{};}
+/* --- ساخت ابزارها بر اساس پشتیبانی --- */
+function buildCamTools(){
+ const tr=document.getElementById('camToolRow');
+ const sl=document.getElementById('camSliders');
+ const sc=document.getElementById('camSceneRow');
+ const c=caps();
+ tr.innerHTML='';sl.innerHTML='';sc.innerHTML='';
+ // دکمه‌های ثابت
+ tr.innerHTML+=`<button class="tbtn" onclick="switchCamF()">🔄 دوربین دیگر</button>`;
+ tr.innerHTML+=`<button class="tbtn" onclick="setRefF()">📌 ثبت مرجع</button>`;
+ tr.innerHTML+=`<button class="tbtn" onclick="clearRefF()">✖ حذف مرجع</button>`;
+ if(c.torch)tr.innerHTML+=`<button class="tbtn ${torchOn?'on':''}" id="torchBtnF" onclick="torchToggleF()">💡 چراغ</button>`;
+ // زوم نوری
+ if(c.zoom){
+  const mx=c.zoom.max||4,mn=c.zoom.min||1;
+  sl.innerHTML+=`<div class="sbox"><label>زوم نوری <span id="zvF">۱٫۰</span>×</label>
+   <input type="range" min="${mn}" max="${mx}" step="${c.zoom.step||0.1}" value="1" oninput="setZoomF(parseFloat(this.value))"></div>`;
+ }
+ // زوم دیجیتال
+ sl.innerHTML+=`<div class="sbox"><label>زوم دیجیتال <span id="zvD">۱٫۰</span>×</label>
+  <input type="range" min="1" max="4" step="0.1" value="1" oninput="setZoomD(parseFloat(this.value))"></div>`;
+ // فوکوس
+ if(c.focusMode&&c.focusMode.includes('manual')&&'focusDistance' in c){
+  const mx=c.focusDistance.max||100,mn=c.focusDistance.min||0;
+  sl.innerHTML+=`<div class="sbox"><label>فوکوس دستی <span id="fdvF">۵۰</span></label>
+   <input type="range" min="0" max="100" value="50" oninput="setFocusDistF(this.value)"></div>`;
+ }
+ // EV
+ if('exposureCompensation' in c){
+  const mn=c.exposureCompensation.min??-3,mx=c.exposureCompensation.max??3;
+  sl.innerHTML+=`<div class="sbox"><label>نور EV <span id="evvF">۰</span></label>
+   <input type="range" min="${mn}" max="${mx}" step="${c.exposureCompensation.step||0.5}" value="0" oninput="setEVF(this.value)"></div>`;
+ }
+ // ISO
+ if(c.iso){
+  const opts=[100,200,400,800,1600,3200].filter(i=>i<=(c.iso.max||1600)).map(i=>`<option value="${i}">${fa(i)}</option>`).join('');
+  sl.innerHTML+=`<div class="sbox"><label>ISO</label><select onchange="applyCamToolF('iso',this.value?parseInt(this.value):undefined)"><option value="">اتو</option>${opts}</select></div>`;
+ }
+ // تراز سفیدی
+ if(c.whiteBalanceMode&&c.whiteBalanceMode.includes('manual')){
+  sl.innerHTML+=`<div class="sbox"><label>تراز سفیدی</label><select onchange="applyCamToolF('whiteBalanceMode',this.value||undefined)">
+   <option value="">اتو</option><option value="manual">دستی</option></select></div>`;
+ }
+ // ضدلرزش
+ if(c.imageStabilization){
+  sl.innerHTML+=`<div class="sbox"><label>ضدلرزش</label><select onchange="applyCamToolF('imageStabilization',this.value||undefined)">
+   <option value="">پیش‌فرض</option><option value="on">روشن</option><option value="off">خاموش</option></select></div>`;
+ }
+ // تراکم گرید
+ sl.innerHTML+=`<div class="sbox"><label>تراکم گرید <span id="gvF">${gridN}</span></label>
+  <input type="range" min="2" max="20" value="${gridN}" oninput="gridN=parseInt(this.value);document.getElementById('gvF').textContent=gridN;drawGrid()"></div>`;
+ // شفافیت شبح
+ sl.innerHTML+=`<div class="sbox"><label>شفافیت شبه <span id="ovF">۴۰</span>٪</label>
+  <input type="range" min="0" max="90" value="40" oninput="document.getElementById('ovF').textContent=this.value;document.getElementById('ghostF').style.opacity=this.value/100"></div>`;
+ // حالت‌های صحنه
+ const scenes=[['normal','عادی'],['hot','🔥 داغ/نورانی'],['dark','🌙 تیره'],['bright','☀️ پرنور']];
+ sc.innerHTML=scenes.map(([k,l])=>`<button class="tbtn ${curScene===k?'on':''}" id="scF-${k}" onclick="setSceneF('${k}')">${l}</button>`).join('');
+ // سوییچ‌ها (گرید/شبه روی تصویر، گوشه راست)
+ const tg=document.getElementById('camToggleRow');
+ tg.innerHTML=`<div class="camtoggle"><input type="checkbox" id="gridToggleF" checked onchange="drawGrid()"> گرید</div>
+  <div class="camtoggle"><input type="checkbox" id="ghostToggleF" onchange="toggleGhostF()"> شبه</div>`;
+ // حالت‌های پنل
+ document.getElementById('camFullscreen').classList.remove('slidersOpen');
+ document.getElementById('camSliders').classList.remove('open');
+}
+/* --- اعمال تنظیمات --- */
+function applyCamToolF(key,val){
+ const t=stream&&stream.getVideoTracks()[0];
+ if(!t)return;
+ try{
+  if(val===undefined||val===null||val===''){t.applyConstraints({advanced:[{[key]:false}]}).catch(()=>{});}
+  else{t.applyConstraints({advanced:[{[key]:val}]}).catch(()=>{});}
+  camMsg('✅ تنظیم شد');
+ }catch(e){camMsg('⚠️ پشتیبانی نمی‌شود');}
+}
+function setZoomF(z){
+ const t=stream&&stream.getVideoTracks()[0];
+ document.getElementById('zvF').textContent=z.toLocaleString('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1});
+ if(t&&zoomCaps&&zoomCaps.zoom)t.applyConstraints({advanced:[{zoom:Math.round(z*100)/100}]}).catch(()=>{});
+}
+function setZoomD(z){
+ zoom=z;
+ const zvd=document.getElementById('zvD');
+ if(zvd)zvd.textContent=z.toLocaleString('fa-IR',{minimumFractionDigits:1,maximumFractionDigits:1});
+ const box=document.getElementById('captureBox');
+ if(box)box.style.transform='scale('+z+')';
+}
+function setFocusDistF(v){
+ document.getElementById('fdvF').textContent=v;
+ const t=stream&&stream.getVideoTracks()[0];if(!t)return;
+ const c=caps(),mn=c.focusDistance.min||0,mx=c.focusDistance.max||100;
+ const dist=mn+(mx-mn)*(v/100);
+ try{t.applyConstraints({advanced:[{focusMode:'manual',focusDistance:dist}]}).catch(()=>{});}catch(e){}
+}
+function setEVF(v){
+ document.getElementById('evvF').textContent=(parseFloat(v)>0?'+':'')+v;
+ const t=stream&&stream.getVideoTracks()[0];if(!t)return;
+ const c=caps(),mn=c.exposureCompensation.min??-3,mx=c.exposureCompensation.max??3;
+ const ev=Math.min(mx,Math.max(mn,parseFloat(v)));
+ try{t.applyConstraints({advanced:[{exposureMode:'manual',exposureCompensation:ev}]}).catch(()=>{});}catch(e){}
+}
+function setSceneF(name){
+ curScene=name;
+ document.querySelectorAll('#camSceneRow .tbtn').forEach(b=>b.classList.remove('on'));
+ const el=document.getElementById('scF-'+name);if(el)el.classList.add('on');
+ const t=stream&&stream.getVideoTracks()[0];if(!t)return;
+ const c=caps();
+ const msgs={normal:'عادی',hot:'🔥 داغ/نورانی: نور کم، WB خنک',dark:'🌙 تیره: ISO بالا، نور زیاد',bright:'☀️ پرنور: نور کم'};
+ try{
+  if(name==='hot'){
+   if('exposureCompensation' in c)t.applyConstraints({advanced:[{exposureMode:'manual',exposureCompensation:Math.max(c.exposureCompensation.min??-3,-1.5)}]}).catch(()=>{});
+   if(c.whiteBalanceMode&&c.whiteBalanceMode.includes('manual'))t.applyConstraints({advanced:[{whiteBalanceMode:'manual',whiteBalanceTemperature:Math.min(c.whiteBalanceTemperature?.max||6500,6500)}]}).catch(()=>{});
+   if(c.iso)t.applyConstraints({advanced:[{iso:Math.min(c.iso.min||100,200)}]}).catch(()=>{});
+  }else if(name==='dark'){
+   if('exposureCompensation' in c)t.applyConstraints({advanced:[{exposureMode:'manual',exposureCompensation:Math.min(c.exposureCompensation.max??3,2)}]}).catch(()=>{});
+   if(c.iso)t.applyConstraints({advanced:[{iso:Math.max(c.iso.max||800,1600)}]}).catch(()=>{});
+  }else if(name==='bright'){
+   if('exposureCompensation' in c)t.applyConstraints({advanced:[{exposureMode:'manual',exposureCompensation:Math.max(c.exposureCompensation.min??-3,-2)}]}).catch(()=>{});
+  }else{
+   if('exposureMode' in c)t.applyConstraints({advanced:[{exposureMode:'auto'}]}).catch(()=>{});
+   if(c.whiteBalanceMode)t.applyConstraints({advanced:[{whiteBalanceMode:'auto'}]}).catch(()=>{});
+   if(c.iso)t.applyConstraints({advanced:[{iso:false}]}).catch(()=>{});
+  }
+  camMsg('✅ '+msgs[name]);
+ }catch(e){camMsg('⚠️ '+msgs[name]+' (محدودیت دوربین)');}
+}
+async function torchToggleF(){
+ const t=stream&&stream.getVideoTracks()[0];if(!t)return;
+ try{
+  torchOn=!torchOn;
+  await t.applyConstraints({advanced:[{torch:torchOn}]});
+  const b=document.getElementById('torchBtnF');
+  if(b){b.classList.toggle('on',torchOn);b.textContent=torchOn?'💡 چراغ روشن':'💡 چراغ';}
+  camMsg(torchOn?'💡 چراغ روشن':'💡 چراغ خاموش');
+ }catch(e){camMsg('⚠️ خطا در چراغ قوه');}
+}
+async function switchCamF(){
+ face=(face==='environment')?'user':'environment';
+ try{
+  if(stream)stream.getTracks().forEach(t=>t.stop());
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:face,width:{ideal:1280}},audio:false});
+  const v=document.getElementById('videoF');v.srcObject=stream;
+  v.onloadedmetadata=()=>{drawGrid();detectCaps();};
+  camMsg('🔄 دوربین عوض شد');
+ }catch(e){camMsg('⚠️ خطا: '+e.message);}
+}
+function setRefF(){
+ if(!stream){camMsg('⚠️ دوربین هنوز آماده نشده');return;}
+ try{localStorage.setItem('bt_ref',frameF(800));}catch(e){}
+ const g=document.getElementById('ghostF');g.src=localStorage.getItem('bt_ref');g.style.display='block';
+ document.getElementById('ghostToggleF').checked=true;
+ drawGrid();updateShutterLock();
+ camMsg('✅ فریم مرجع ثبت شد — حالا صحنه را داخل کادر زرد منطبق کن');
+}
+function clearRefF(){
+ localStorage.removeItem('bt_ref');
+ const g=document.getElementById('ghostF');g.style.display='none';
+ document.getElementById('ghostToggleF').checked=false;
+ drawGrid();updateShutterLock();
+ camMsg('✖ مرجع حذف شد');
+}
+/* --- شاتر همیشه فعال (قفل فقط در حالت busy) --- */
+function updateShutterLock(){
+ const sh=document.getElementById('shutter');
+ if(!sh)return;
+ sh.classList.remove('off');
+}
+function camMsg(t){document.getElementById('camToolMsgF').textContent=t;clearTimeout(camMsg._t);camMsg._t=setTimeout(()=>{document.getElementById('camToolMsgF').textContent='';},3000);}
+/* --- گرید روی تصویر زنده --- */
+function drawGrid(){
+ const box=document.getElementById('captureBox'),c=document.getElementById('gridF');
+ if(!box||!c)return;
+ const w=box.clientWidth||360,h=box.clientHeight||480;
+ c.width=w;c.height=h;
+ const x=c.getContext('2d');x.clearRect(0,0,w,h);
+ if(!document.getElementById('gridToggleF')||!document.getElementById('gridToggleF').checked)return;
+ // گرید سبز
+ x.strokeStyle='rgba(0,255,0,.75)';x.lineWidth=1;
+ for(let i=1;i<gridN;i++){x.beginPath();x.moveTo(w*i/gridN,0);x.lineTo(w*i/gridN,h);x.stroke();
+  x.beginPath();x.moveTo(0,h*i/gridN);x.lineTo(w,h*i/gridN);x.stroke();}
+ // کادر قرمز اصلی (دائمی، روی دوربین و شبه یکسان)
+ x.strokeStyle='rgba(255,0,0,.95)';x.lineWidth=4;x.strokeRect(6,6,w-12,h-12);
+ x.fillStyle='rgba(255,0,0,.95)';x.fillRect(w/2-6,h/2-2,12,4);x.fillRect(w/2-2,h/2-6,4,12);
+ // کادر دوم شبه: داخل کادر اصلی، حدود ۸٪ کوچکتر، فقط وقتی شبه روشن است
+ if(document.getElementById('ghostToggleF')&&document.getElementById('ghostToggleF').checked){
+  const m=Math.round(w*0.08);
+  x.strokeStyle='rgba(255,200,0,.9)';x.lineWidth=2;
+  x.setLineDash([8,6]);x.strokeRect(m,m,w-2*m,h-2*m);x.setLineDash([]);
+  // خطوط راهنمای مرکزی برای تطبیق بهتر
+  x.strokeStyle='rgba(255,255,255,.45)';x.lineWidth=1;x.setLineDash([4,6]);
+  x.beginPath();x.moveTo(w/2,0);x.lineTo(w/2,h);x.stroke();
+  x.beginPath();x.moveTo(0,h/2);x.lineTo(w,h/2);x.stroke();
+  x.setLineDash([]);
+ }
+}
+/* --- پینچ زوم --- */
+function pinchDist(t){const dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].clientY;return Math.hypot(dx,dy);}
+(function(){
+ const stage=document.getElementById('camFullscreen');let pd=0,pz=1;
+ if(!stage)return;
+ const onStart=e=>{if(e.touches.length===2){pd=pinchDist(e.touches);pz=zoom;}};
+ const onMove=e=>{if(e.touches.length===2&&pd>0){e.preventDefault();setZoomD(Math.min(4,Math.max(1,pz*pinchDist(e.touches)/pd)));}};
+ stage.addEventListener('touchstart',onStart,{passive:true});
+ stage.addEventListener('touchmove',onMove,{passive:false});
+})();
+/* --- ثبت عکس: دقیقاً همان چیزی که داخل #captureBox دیده می‌شود --- */
+function frameF(maxSide){
+ const v=document.getElementById('videoF');
+ const box=document.getElementById('captureBox');
+ const vw=v.videoWidth||1280,vh=v.videoHeight||720;
+ const boxAR=3/4;
+ // کادری که در صفحه می‌بینیم: نسبت ۳:۴ از مرکز تصویر خام
+ let cw=vw,ch=vh;
+ if(vw/vh>boxAR)cw=vh*boxAR;else ch=vw/boxAR;
+ const ox=(vw-cw)/2,oy=(vh-ch)/2;
+ // زوم دیجیتال روی همان کادر
+ const zw=cw/zoom,zh=ch/zoom;
+ const sx=ox+(cw-zw)/2,sy=oy+(ch-zh)/2;
+ const s=Math.min(1,maxSide/Math.max(zw,zh));
+ const c=document.createElement('canvas');
+ c.width=Math.round(zw*s);c.height=Math.round(zh*s);
+ const ctx=c.getContext('2d');
+ ctx.drawImage(v,sx,sy,zw,zh,0,0,c.width,c.height);
+ // کادر قرمز و گرید روی عکس ثبت‌شده (دائمی) — همان کادر روی صفحه
+ ctx.strokeStyle='rgba(255,0,0,.95)';ctx.lineWidth=Math.max(3,Math.round(c.width*0.012));
+ ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,c.width-ctx.lineWidth,c.height-ctx.lineWidth);
+ if(document.getElementById('gridToggleF')&&document.getElementById('gridToggleF').checked){
+  ctx.strokeStyle='rgba(0,255,0,.85)';ctx.lineWidth=2;
+  for(let i=1;i<gridN;i++){ctx.beginPath();ctx.moveTo(c.width*i/gridN,0);ctx.lineTo(c.width*i/gridN,c.height);ctx.stroke();
+   ctx.beginPath();ctx.moveTo(0,c.height*i/gridN);ctx.lineTo(c.width,c.height*i/gridN);ctx.stroke();}
+ }
+ return c.toDataURL('image/jpeg',.85);
+}
+async function dataUrlToBlob(u){return (await fetch(u)).blob();}
+async function shootF(){
+ if(camBusy)return;
+ if(!stream){camMsg('⚠️ دوربین آماده نیست');return;}
+ const proj=currentProject();
+ if(!proj){camMsg('⚠️ پروژه انتخاب نشده');return;}
+ const ghostOn=document.getElementById('ghostToggleF')&&document.getElementById('ghostToggleF').checked;
+ if(!ghostOn)camMsg('ℹ️ بدون شبه — برای تطبیق زاویه بعدی، شبه را فعال کن');
+ camBusy=true;
+ const btn=document.getElementById('shutter');if(btn)btn.classList.add('busy');
+ camMsg('⏳ در حال ثبت...');
+ try{
+  const shot=frameF(1280);
+  const fd=new FormData();
+  fd.append('file',await dataUrlToBlob(shot),'photo.jpg');
+  const r=await api('/api/projects/'+encodeURIComponent(proj)+'/photos',{method:'POST',body:fd});
+  const j=await r.json();
+  if(!r.ok){camMsg('❌ خطا: '+(j.detail||''));}
+  else{
+   // اگر شبه خاموش بود، همین عکس به‌عنوان مرجع بعدی ثبت شود
+   if(!ghostOn){
+    try{localStorage.setItem('bt_ref',shot);}catch(e){}
+    const g=document.getElementById('ghostF');
+    if(g){g.src=shot;g.style.display='block';}
+    const gt=document.getElementById('ghostToggleF');
+    if(gt){gt.checked=true;}
+    drawGrid();updateShutterLock();
+    camMsg('✅ ثبت شد: '+j.photo.at.fa+' — عکس بعدی روی این مرجع منطبق شود');
+   }else{
+    camMsg('✅ ثبت شد: '+j.photo.at.fa+' — '+j.photo.file);
+   }
+   await refreshProjectLists();
+   document.getElementById('projSel').value=proj;
+  }
+ }catch(e){camMsg('❌ خطای ارتباط');}
+ finally{
+  camBusy=false;if(btn)btn.classList.remove('busy');
+  // جلوگیری از قفل شدن دوربین: بازنشانی استریم و ویدیو
+  primeCamera();
+ }
+}
+/* --- بازنشانی زنده‌ی دوربین بعد از ثبت/توقف --- */
+function primeCamera(){
+ try{
+  const v=document.getElementById('videoF');
+  if(stream&&v){
+   const t=stream.getVideoTracks()[0];
+   if(t&&t.readyState==='live'){
+    // درخواست مجدد فریم برای جلوگیری از مکث
+    if(typeof t.getFrame==='function'){}
+   }
+   v.play().catch(()=>{});
+   v.srcObject=stream;
+   if(t&&t.readyState==='live'){
+    try{t.applyConstraints({advanced:[{}]}).catch(()=>{});}catch(e){}
+   }
+  }
+  drawGrid();
+ }catch(e){}
+}
+/* --- چیدمان قاب ۳:۴ در فضای خالی stage، با احتساب پلاگین‌ها --- */
+function layoutBox(){
+ const st=document.getElementById('camStage'),box=document.getElementById('captureBox');
+ if(!st||!box)return;
+ const sw=st.clientWidth,sh=st.clientHeight;
+ if(!sw||!sh)return;
+ // ردیف ابزارها پایین stage (۳۸px) + صحنه‌ها/سوییچ‌ها بالای آن (۳۸px)
+ const reserved=80;
+ const w=Math.round(Math.min(sw-8,(sh-reserved)*3/4));
+ box.style.width=w+'px';
+ box.style.height=Math.round(w*4/3)+'px';
+ drawGrid();
+}
+function toggleSlidersF(){
+ const s=document.getElementById('camSliders');
+ if(!s)return;
+ const open=s.classList.toggle('open');
+ document.getElementById('camToolsBtn').classList.toggle('on',open);
+ setTimeout(layoutBox,210);
+}
+window.addEventListener('resize',layoutBox);
+window.addEventListener('orientationchange',()=>setTimeout(layoutBox,300));
+
+/* ===== پروژه‌ها ===== */
+function currentProject(){const s=document.getElementById('projSel');return s?(s.value||'').trim():'';}
+function onProjectChange(){const v=currentProject();document.getElementById('projmsg').textContent=v?'پروژه فعال: '+v:'';}
+function newProjectToggle(){const box=document.getElementById('newProjBox');box.style.display=(box.style.display==='none')?'block':'none';if(box.style.display==='block')document.getElementById('newProj').focus();}
+async function refreshProjectLists(){
+ try{
+  const r=await api('/api/projects');const j=await r.json();
+  if(!j.ok)return;
+  const cur=currentProject();
+  const curG=(document.getElementById('projSelG')||{}).value||'';
+  const fill=(id,keep)=>{
+   const el=document.getElementById(id);const prev=keep?el.value:'';
+   el.innerHTML='<option value="">— پروژه را انتخاب کن —</option>';
+   for(const p of j.projects)el.innerHTML+=`<option value="${p.name.replace(/"/g,'&quot;')}">${p.name} (${fa(p.photo_count)} عکس)</option>`;
+   if(prev)el.value=prev;
+  };
+  fill('projSel',true);fill('projSelG',true);
+  if(cur)document.getElementById('projSel').value=cur;
+  if(curG)document.getElementById('projSelG').value=curG;
+ }catch(e){}
+}
+async function createProject(){
+ const name=document.getElementById('newProj').value.trim();
+ if(!name){alert('نام پروژه را وارد کن');return;}
+ try{
+  const r=await api('/api/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:name})});
+  const j=await r.json();
+  if(!r.ok){alert('خطا: '+(j.detail||''));return;}
+  await refreshProjectLists();
+  document.getElementById('projSel').value=j.project;
+  onProjectChange();
+  document.getElementById('newProjBox').style.display='none';
+  document.getElementById('newProj').value='';
+ }catch(e){alert('خطای ارتباط با سرور');}
+}
+
+/* ===== ثبت عکس از فایل (تب تحلیل) ===== */
+function setSlot(which,dataUrl,label){
+ store[which]=dataUrl;
+ const img=which==='before'?document.getElementById('iB'):document.getElementById('iA');
+ img.src=dataUrl;img.style.display='block';
+ (which==='before'?document.getElementById('lB'):document.getElementById('lA')).textContent=label;
+}
+function fileToSlot(inp,which){
+ const f=inp.files[0];if(!f)return;
+ const r=new FileReader();
+ r.onload=()=>setSlot(which,r.result,'فایل');
+ r.readAsDataURL(f);
+}
+document.getElementById('fB').onchange=function(){fileToSlot(this,'before')};
+document.getElementById('fA').onchange=function(){fileToSlot(this,'after')};
+window.addEventListener('resize',drawGrid);
+
+/* ===== گالری ===== */
+async function loadGallery(){
+ const g=document.getElementById('projSelG').value;
+ const box=document.getElementById('gallery');
+ pick={ref:null,other:null};updateReportBar();
+ if(!g){box.innerHTML='<p class="muted">یک پروژه انتخاب کن.</p>';return;}
+ box.innerHTML='<p class="muted">⏳ در حال بارگذاری...</p>';
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(g)+'/photos');
+  const j=await r.json();
+  if(!r.ok||!j.photos.length){box.innerHTML='<p class="muted">هنوز عکسی در این پروژه ثبت نشده. از تب «دوربین» عکس بگیر.</p>';return;}
+  const rev=[...j.photos].reverse();
+  const showGrid=document.getElementById('showGridOv')?document.getElementById('showGridOv').checked:true;
+  const enc=encodeURIComponent(document.getElementById('projSelG').value);
+  // عکس‌ها نیاز به توکن دارند؛ با fetch می‌گیریم و به objectURL تبدیل می‌کنیم
+  const items=await Promise.all(rev.map(async(p)=>{
+   const url=showGrid?p.url:('/api/projects/'+enc+'/photos/'+encodeURIComponent(p.file)+'/raw');
+   let src='';
+   try{
+    const rr=await fetch(url,{headers:{'Authorization':TOKEN?'Bearer '+TOKEN:''}});
+    if(rr.ok){src=URL.createObjectURL(await rr.blob());}
+   }catch(e){}
+   return {p,src};
+  }));
+  box.innerHTML=items.map(({p,src})=>{
+   const ap=p.approved?'<span class="badge on">✓ تأییدشده</span>':'<span class="badge off">در انتظار</span>';
+   const at=p.at||{};
+   const wd=at.weekday?(' '+at.weekday+'، '):'';
+   const stamp=`${wd}${at.date_fa||'—'} — ${at.time_fa||''}`;
+   return `
+   <div class="tl-item ${p.approved?'approved':''}" id="gi${p.index}">
+    <img src="${src}" onclick="openLB(this.src,'${stamp}')" loading="lazy">
+    <div class="tl-meta">
+     <div class="dt">${stamp}</div>
+     <div class="muted">#${fa(p.index+1)} · ${p.source==='upload'?'آپلود':'دوربین'} · ${p.author||'—'} ${ap}</div>
+     <div class="mini">
+      <button onclick="setGhostFromUrl('${p.url}')">⬅ مرجع شبه</button>
+      <button onclick="slotFromUrl('${p.url}','before')">↩ به تحلیل</button>
+      <button class="warnb" onclick="slotFromUrl('${p.url}','after')">دوم ➡</button>
+      <button onclick="togglePick(${p.index})">📋 انتخاب برای گزارش</button>
+      <button onclick="toggleComments('${p.file}')">💬 کامنت (${fa((p.comments||[]).length)})</button>
+      ${can('approve_photo')&&!p.approved?`<button class="okb" onclick="approvePhoto('${p.file}',true)">✅ تأیید</button>`:''}
+      ${can('approve_photo')&&p.approved?`<button class="warnb" onclick="approvePhoto('${p.file}',false)">در انتظار</button>`:''}
+      ${can('delete_photo')?`<button class="warnb" onclick="delPhoto('${p.file}')">🗑 حذف</button>`:''}
+     </div>
+     <div id="cmts-${p.index}"></div>
+    </div>
+   </div>`;}).join('');
+ }catch(e){box.innerHTML='<p class="muted">خطا در بارگذاری گالری.</p>';}
+}
+function togglePick(idx){
+ // فقط عکس‌های تأییدشده می‌توانند مرجع شوند
+ const g=document.getElementById('projSelG').value;
+ const item=document.getElementById('gi'+idx);
+ if(pick.ref===idx)pick.ref=null;
+ else if(pick.other===idx)pick.other=null;
+ else if(pick.ref===null)pick.ref=idx;
+ else if(pick.other===null)pick.other=idx;
+ else{pick.ref=pick.other;pick.other=idx;}
+ // هایلایت
+ document.querySelectorAll('#gallery .tl-item').forEach(el=>el.classList.remove('pick'));
+ if(pick.ref!==null){const el=document.getElementById('gi'+pick.ref);if(el)el.classList.add('pick');}
+ if(pick.other!==null){const el=document.getElementById('gi'+pick.other);if(el)el.classList.add('pick');}
+ updateReportBar();
+}
+function updateReportBar(){
+ const bar=document.getElementById('reportBar'),info=document.getElementById('reportInfo');
+ if(can('report')&&pick.ref!==null&&pick.other!==null){
+  bar.style.display='block';
+  info.textContent='مرجع: عکس #'+fa(pick.ref+1)+' | دوم: عکس #'+fa(pick.other+1);
+ }else{bar.style.display='none';}
+}
+async function approvePhoto(file,approved){
+ const g=document.getElementById('projSelG').value;
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(g)+'/photos/'+encodeURIComponent(file)+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({approved:approved})});
+  if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||''));return;}
+  loadGallery();
+ }catch(e){alert('خطای ارتباط');}
+}
+async function toggleComments(file){
+ // نمایش/مخفی کامنت‌ها
+ const g=document.getElementById('projSelG').value;
+ const photos=document.querySelectorAll('#gallery .tl-item');
+ // پیدا کردن ایندکس از file
+ const r=await api('/api/projects/'+encodeURIComponent(g)+'/photos/'+encodeURIComponent(file)+'/comments');
+ const j=await r.json();
+ const boxId='cmts-'+file;
+ let box=document.getElementById(boxId);
+ if(!box){
+  // پیدا کردن با data
+  const items=document.querySelectorAll('#gallery .tl-item');
+  for(const it of items){if(it.innerHTML.includes(file)){box=it.querySelector('[id^="cmts-"]');}}
+ }
+ if(!box)return;
+ if(box.style.display==='block'){box.style.display='none';box.innerHTML='';return;}
+ if(!j.ok){box.style.display='block';box.innerHTML='<p class="muted">خطا در بارگذاری کامنت‌ها</p>';return;}
+ let h='';
+ for(let i=0;i<j.comments.length;i++){
+  const c=j.comments[i];
+  h+=`<div class="cmt"><b>${c.author||'?'}</b> · ${c.at.fa||''}<br>${(c.text||'').replace(/</g,'&lt;')}
+   ${can('comment')?`<span class="del" onclick="delComment('${file}',${i})">حذف</span>`:''}</div>`;
+ }
+ if(can('comment')){
+  h+=`<div style="display:flex;gap:6px;margin-top:6px"><input type="text" id="cmtInp-${file}" placeholder="کامنت بنویس..." style="flex:3;font-size:13px;padding:6px"><button class="secondary" style="flex:1;padding:6px;font-size:12px" onclick="addComment('${file}')">ارسال</button></div>`;
+ }
+ box.style.display='block';
+ box.innerHTML=h;
+}
+async function addComment(file){
+ const g=document.getElementById('projSelG').value;
+ const inp=document.getElementById('cmtInp-'+file);
+ if(!inp)return;
+ const text=inp.value.trim();
+ if(!text)return;
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(g)+'/photos/'+encodeURIComponent(file)+'/comments',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:text})});
+  if(!r.ok){alert('خطا در ثبت کامنت');return;}
+  const cur=inp.value; // حفظ متن در صورت خطا
+  await toggleComments(file); // بستن
+  await toggleComments(file); // باز کردن مجدد با کامنت جدید
+ }catch(e){alert('خطای ارتباط');}
+}
+async function delComment(file,index){
+ const g=document.getElementById('projSelG').value;
+ if(!confirm('حذف این کامنت؟'))return;
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(g)+'/photos/'+encodeURIComponent(file)+'/comments/'+index,{method:'DELETE'});
+  if(!r.ok){alert('خطا در حذف');return;}
+  toggleComments(file);toggleComments(file);
+ }catch(e){alert('خطای ارتباط');}
+}
+async function delPhoto(file){
+ if(!confirm('حذف این عکس؟ این کار قابل بازگشت نیست.'))return;
+ const g=document.getElementById('projSelG').value;
+ try{
+  const r=await api('/api/projects/'+encodeURIComponent(g)+'/photos/'+encodeURIComponent(file),{method:'DELETE'});
+  const j=await r.json();
+  if(r.ok&&j.ok){loadGallery();refreshProjectLists();}
+  else alert('خطا در حذف: '+(j.detail||''));
+ }catch(e){alert('خطای ارتباط');}
+}
+async function setGhostFromUrl(url){
+ try{
+  const r=await fetch(url,{headers:{'Authorization':TOKEN?'Bearer '+TOKEN:''}});
+  if(!r.ok){alert('خطا در بارگذاری عکس مرجع');return;}
+  const b=await r.blob();
+  const dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});
+  localStorage.setItem('bt_ref',dataUrl);
+  const g=document.getElementById('ghostF');
+  g.src=dataUrl;g.style.display='block';
+  document.getElementById('ghostToggleF').checked=true;
+  drawGrid();updateShutterLock();
+  camMsg('✅ مرجع از گالری تنظیم شد — تصویر زنده را داخل کادر زرد منطبق کن');
+  tab(1);
+ }catch(e){alert('خطا در بارگذاری عکس مرجع');}
+}
+async function slotFromUrl(url,which){
+ try{
+  const r=await fetch(url,{headers:{'Authorization':TOKEN?'Bearer '+TOKEN:''}});
+  if(!r.ok){alert('خطا در بارگذاری عکس');return;}
+  const b=await r.blob();
+  const dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});
+  setSlot(which,dataUrl,'گالری');
+  tab(3);
+ }catch(e){alert('خطا در بارگذاری عکس');}
+}
+function openLB(src,cap){
+ document.getElementById('lbImg').src=src;
+ document.getElementById('lbCap').textContent=cap;
+ document.getElementById('lightbox').classList.add('on');
+}
+
+/* ===== گزارش PDF ===== */
+async function makeReport(){
+ const g=document.getElementById('projSelG').value;
+ if(pick.ref===null||pick.other===null){alert('دو عکس را برای گزارش انتخاب کن');return;}
+ const btn=document.getElementById('mkReportBtn');
+ btn.disabled=true;btn.textContent='⏳ در حال ساخت گزارش...';
+ try{
+  const r=await api('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:g,ref_index:pick.ref,other_index:pick.other})});
+  if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||r.status));return;}
+  const blob=await r.blob();
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='گزارش_'+g+'.pdf';
+  document.body.appendChild(a);a.click();a.remove();
+ }catch(e){alert('خطای ارتباط با سرور');}
+ finally{btn.disabled=false;btn.textContent='📄 تهیه گزارش PDF';}
+}
+
+/* ===== تحلیل ===== */
+function cls(v){return v>0?'pos':(v<0?'neg':'');}
+async function go(){
+ if(!store.before||!store.after){alert('هر دو عکس مرجع و دوم را مشخص کن');return;}
+ document.getElementById('st').textContent='⏳ در حال تحلیل...';
+ const fd=new FormData();
+ fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
+ fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
+ fd.append('px_per_mm',document.getElementById('ppm').value||0);
+ try{
+  const r=await api('/api/analyze',{method:'POST',body:fd});
+  const j=await r.json();
+  if(!j.ok){document.getElementById('st').textContent='خطا: '+j.error;return;}
+  document.getElementById('st').textContent='';
+  document.getElementById('out').style.display='block';
+  let s=`<p>مساحت نیمرخ: <b class="${cls(j.area_px.change_pct)}">${j.area_px.change_pct}٪</b></p>`;
+  s+=`<p>پهنا: <b class="${cls(j.bbox_px.width_change_pct)}">${j.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(j.bbox_px.height_change_pct)}">${j.bbox_px.height_change_pct}٪</b></p>`;
+  s+=`<p>حجم تخمینی: <b class="${cls(j.volume_proxy_px3.change_pct)}">${j.volume_proxy_px3.change_pct}٪</b></p>`;
+  if(j.scale)s+=`<p>مساحت: ${j.scale.area_mm2.before} ← ${j.scale.area_mm2.after} mm²<br>حجم تخمینی: ${j.scale.volume_proxy_mm3.before} ← ${j.scale.volume_proxy_mm3.after} mm³</p>`;
+  document.getElementById('sum').innerHTML=s;
+  document.getElementById('tb').innerHTML=j.directions.map(d=>`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`).join('');
+  document.getElementById('ov').src=j.overlay_url;
+  document.getElementById('note').textContent=j.note_fa;
+  document.getElementById('out').scrollIntoView({behavior:'smooth'});
+ }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
+}
+
+/* ===== شروع ===== */
+document.getElementById('liPass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+checkSession();
+</script>
+</body></html>

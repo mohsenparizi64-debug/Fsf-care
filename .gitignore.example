@@ -1,0 +1,19 @@
+# ساختار داده‌ها در زمان اجرا — این فایل‌ها در ریپو نیستند ولی برنامه خودش می‌سازدشان
+#
+# backend/
+#   auth/
+#     users.json        # کاربران و هش پسوردها (به‌صورت خودکار ساخته می‌شود)
+#   projects/
+#     <نام-پروژه>/
+#       meta.json       # متادیتا + لیست عکس‌ها + نظرات
+#       *.jpg            # عکس‌های ثبت‌شده
+#   uploads/
+#     *_before.jpg      # خروجی موقت خط لوله تطبیق
+#     *_after.jpg
+#     *_overlay.jpg
+
+backend/auth/
+backend/projects/
+backend/uploads/
+*.log
+*.pdf
