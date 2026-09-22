@@ -64,17 +64,34 @@ def _public_view(u: dict) -> dict:
     }
 
 
+# --- راه‌اندازی اولیه ---
+# نام کاربری ادمین اولیه (در صورت نبود هیچ کاربری، از این متغیر استفاده می‌شود)
+DEFAULT_ADMIN_USERNAME = os.environ.get("FSFCARE_ADMIN", "admin")
+# رمز عبور ادمین اولیه — حتماً از متغیر محیطی تنظیم شود.
+# اگر تنظیم نشد، یک رمز تصادفی امن تولید و فقط یک‌بار در لاگ سرور چاپ می‌شود.
+DEFAULT_ADMIN_PASSWORD = os.environ.get("FSFCARE_ADMIN_PASSWORD", secrets.token_urlsafe(24))
+
+
 def ensure_default_admin():
-    """ساخت ادمین پیش‌فرض admin/admin123 اگر هیچ یوزری وجود نداشت."""
+    """ساخت ادمین اولیه در صورت نبود هیچ کاربری.
+
+    رمز پیش‌فرض از متغیر محیطی FSFCARE_ADMIN_PASSWORD خوانده می‌شود.
+    اگر تنظیم نشده باشد، یک رمز تصادفی امن تولید شده و در لاگ سرور چاپ
+    می‌گردد تا ادمین بتواند اولین ورود را انجام دهد و سپس رمز را تغییر دهد.
+    """
     users = _load_users()
     if not users:
-        users["admin"] = {
-            "password_hash": _hash("admin123"),
+        users[DEFAULT_ADMIN_USERNAME] = {
+            "password_hash": _hash(DEFAULT_ADMIN_PASSWORD),
             "is_admin": True,
             "perms": _default_perms(True),
             "created_at": time.time(),
         }
         _save_users(users)
+        print("========================================")
+        print("رمز ادمین اولیه ساخته شد: " + DEFAULT_ADMIN_PASSWORD)
+        print("همین حالا وارد شوید و آن را تغییر دهید!")
+        print("========================================", flush=True)
     return users
 
 
