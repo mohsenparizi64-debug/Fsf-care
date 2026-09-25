@@ -1,4 +1,4 @@
-"""بیلداپ‌ترکر — بک‌اند FastAPI. اجرا: python -m uvicorn app.main:app --host 0.0.0.0 --port 8095 (از داخل backend/)"""
+"""fsfmonitor — بک‌اند FastAPI. اجرا: python -m uvicorn app.main:app --host 0.0.0.0 --port 8095 (از داخل backend/)"""
 import os
 import uuid
 import cv2
@@ -16,7 +16,25 @@ FRONTEND_DIR = os.path.join(os.path.dirname(BACKEND_DIR), "frontend")
 UPLOAD_DIR = os.path.join(BACKEND_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-app = FastAPI(title="Buildup Tracker")
+app = FastAPI(title="fsfmonitor")
+
+
+# ---------- HTTP -> HTTPS ----------
+# Cloudflare TLS را خاتمه می‌دهد و همیشه با HTTP به مبدا می‌رسد،
+# پس به جای scheme واقعی، هدر X-Forwarded-Proto بررسی می‌شود.
+# /api/health مستثنی است تا watchdog محلی (HTTP) کار خود را ادامه دهد.
+@app.middleware("http")
+async def force_https(request: Request, call_next):
+    if request.url.path == "/api/health":
+        return await call_next(request)
+    proto = (request.headers.get("x-forwarded-proto") or "").split(",")[0].strip().lower()
+    if proto == "http":
+        return JSONResponse(
+            {"detail": "HTTPS الزامی است"},
+            status_code=301,
+            headers={"Location": request.url.replace(scheme="https").__str__()},
+        )
+    return await call_next(request)
 
 
 # ---------- کمکی‌های احراز هویت ----------
@@ -65,7 +83,7 @@ JDTIME = prj._HAS_JDATE
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "service": "buildup-tracker", "version": "0.8.0", "jdatetime": JDTIME}
+    return {"ok": True, "service": "fsfmonitor", "version": "0.8.0", "jdatetime": JDTIME}
 
 
 # ---------- احراز هویت ----------

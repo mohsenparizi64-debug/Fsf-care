@@ -95,7 +95,7 @@ def build_report(
         buf, pagesize=A4,
         rightMargin=18 * mm, leftMargin=18 * mm,
         topMargin=16 * mm, bottomMargin=16 * mm,
-        title="Buildup Tracker Report",
+        title="fsfmonitor Report",
     )
     st_title = ParagraphStyle("t", fontName="Vazir-Bold", fontSize=17, leading=24,
                               alignment=2, wordWrap="RTL")
@@ -106,7 +106,7 @@ def build_report(
     st_small = ParagraphStyle("s", fontName="Vazir", fontSize=9, leading=14,
                               alignment=2, wordWrap="RTL")
     story = []
-    story.append(Paragraph(_rtl("📷 گزارش تحلیلی Buildup Tracker"), st_title))
+    story.append(Paragraph(_rtl("📷 گزارش تحلیلی fsfmonitor"), st_title))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(_rtl(f"پروژه: {project}"), st_h))
     a_at = (photo_a or {}).get("at", {}).get("fa", "—")

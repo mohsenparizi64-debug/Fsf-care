@@ -55,3 +55,9 @@ diag_tasks.ps1
 diag2.ps1
 check_port.ps1
 watchdog.log
+
+# --- زیرساخت تونل محلی (آدرس تونل + باینری ۵۴MB) ---
+cloudflared.exe
+tunnel.bat
+cloudflared.log
+

@@ -1,9 +1,9 @@
 @echo off
 cd /d "%~dp0"
-title Buildup Tracker Launcher
+title fsfmonitor Launcher
 
 echo ===================================================
-echo   Buildup Tracker Launcher
+echo   fsfmonitor Launcher
 echo ===================================================
 echo.
 
@@ -39,7 +39,7 @@ call venv\Scripts\activate.bat
 pip install -r requirements.txt
 
 echo.
-echo [2/2] Starting Buildup Tracker on port 8095...
+echo [2/2] Starting fsfmonitor on port 8095...
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8095
 
 pause

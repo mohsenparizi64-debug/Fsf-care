@@ -1,16 +1,16 @@
 @echo off
-title Buildup Tracker Server Launcher
+title fsfmonitor Server Launcher
 color 0A
 chcp 65001 > nul
 
 echo ========================================================
-echo   Starting Buildup Tracker
+echo   Starting fsfmonitor
 echo   Backend + Frontend: Port 8095 (Host: 0.0.0.0)
 echo ========================================================
 echo.
 
 echo [1/1] Launching FastAPI Server on Port 8095...
-start "Buildup Backend" cmd /k "cd /d %~dp0backend && (if exist venv\Scripts\activate.bat call venv\Scripts\activate.bat) && python -m uvicorn app.main:app --host 0.0.0.0 --port 8095"
+start "fsfmonitor Backend" cmd /k "cd /d %~dp0backend && (if exist venv\Scripts\activate.bat call venv\Scripts\activate.bat) && python -m uvicorn app.main:app --host 0.0.0.0 --port 8095"
 
 echo.
 echo ========================================================
