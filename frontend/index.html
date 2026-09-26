@@ -15,6 +15,7 @@ header .who button{background:rgba(255,255,255,.2);border:0;color:#fff;border-ra
 main{max-width:640px;margin:0 auto;padding:0 12px 12px}
 .card{background:#fff;border:1px solid #e1e4e2;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .tab{display:none}.tab.on{display:block}
+nav button.on{background:#1a7f37!important;color:#fff!important}
 .muted{color:#666;font-size:12.5px;line-height:1.9}
 input[type=text],input[type=password],input[type=number],select{width:100%;font-size:15px;padding:10px;border:1px solid #ccc;border-radius:10px;margin-top:4px}
 button.primary{background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:bold;cursor:pointer;min-height:52px}
@@ -954,18 +955,37 @@ async function loadGallery(){
  }catch(e){box.innerHTML='<p class="muted">خطا در بارگذاری گالری.</p>';}
 }
 function togglePick(idx){
- // فقط عکس‌های تأییدشده می‌توانند مرجع شوند
- const g=document.getElementById('projSelG').value;
- const item=document.getElementById('gi'+idx);
+ // جلوگیری از انتخاب یک عکس بهعنوان هر دو
  if(pick.ref===idx)pick.ref=null;
  else if(pick.other===idx)pick.other=null;
  else if(pick.ref===null)pick.ref=idx;
- else if(pick.other===null)pick.other=idx;
- else{pick.ref=pick.other;pick.other=idx;}
- // هایلایت
- document.querySelectorAll('#gallery .tl-item').forEach(el=>el.classList.remove('pick'));
- if(pick.ref!==null){const el=document.getElementById('gi'+pick.ref);if(el)el.classList.add('pick');}
- if(pick.other!==null){const el=document.getElementById('gi'+pick.other);if(el)el.classList.add('pick');}
+ else if(pick.other===null){
+  if(idx===pick.ref){alert('⚠️ این عکس قبلاً بهعنوان مرجع انتخاب شده. اول مرجع را حذف کن یا عکس دیگری انتخاب کن.');return;}
+  pick.other=idx;
+ }else{
+  // هر دو پر هستند — جایگزینی با بررسی تکرار
+  if(idx===pick.ref){alert('⚠️ این عکس قبلاً بهعنوان مرجع انتخاب شده.');return;}
+  pick.ref=pick.other;pick.other=idx;
+ }
+ // هایلایت + لیبل مرجع/دوم
+ document.querySelectorAll('#gallery .tl-item').forEach(el=>{
+  el.classList.remove('pick');
+  const b=el.querySelector('.pickBadge');if(b)b.remove();
+ });
+ if(pick.ref!==null){
+  const el=document.getElementById('gi'+pick.ref);
+  if(el){el.classList.add('pick');el.style.outline='3px solid #1a7f37';
+   const badge=document.createElement('span');badge.className='pickBadge';
+   badge.textContent='📌 مرجع';badge.style.cssText='position:absolute;top:4px;left:4px;background:#1a7f37;color:#fff;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:bold;z-index:2';
+   el.style.position='relative';el.appendChild(badge);}
+ }
+ if(pick.other!==null){
+  const el=document.getElementById('gi'+pick.other);
+  if(el){el.classList.add('pick');el.style.outline='3px solid #b8860b';
+   const badge=document.createElement('span');badge.className='pickBadge';
+   badge.textContent='➡ دوم';badge.style.cssText='position:absolute;top:4px;left:4px;background:#b8860b;color:#fff;font-size:11px;padding:2px 8px;border-radius:6px;font-weight:bold;z-index:2';
+   el.style.position='relative';el.appendChild(badge);}
+ }
  updateReportBar();
 }
 function updateReportBar(){

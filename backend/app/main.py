@@ -405,17 +405,23 @@ async def api_report(request: Request):
     pb_path = os.path.join(prj.DATA_DIR, project, pb["file"])
 
     uid = uuid.uuid4().hex[:8]
-    res, overlay, _ = analyze(pa_path, pb_path, px_per_mm=None, inset=0.08)
+    try:
+        res, overlay, _ = analyze(pa_path, pb_path, px_per_mm=None, inset=0.08)
+    except Exception as e:
+        raise HTTPException(400, f"خطا در تحلیل تصاویر: {e}")
     ov_path = os.path.join(UPLOAD_DIR, f"{uid}_overlay.jpg")
     cv2.imwrite(ov_path, overlay)
 
-    pdf_bytes = pdfgen.build_report(
-        project=project,
-        photo_a=pa, photo_b=pb,
-        analysis=res,
-        img_a_path=pa_path, img_b_path=pb_path,
-        overlay_path=ov_path,
-    )
+    try:
+        pdf_bytes = pdfgen.build_report(
+            project=project,
+            photo_a=pa, photo_b=pb,
+            analysis=res,
+            img_a_path=pa_path, img_b_path=pb_path,
+            overlay_path=ov_path,
+        )
+    except Exception as e:
+        raise HTTPException(500, f"خطا در ساخت PDF: {e}")
     fname = f"report_{pa['file'][:-4]}_{pb['file'][:-4]}.pdf"
     from urllib.parse import quote as _quote
     fname_ascii = fname.encode("ascii", "ignore").decode("ascii").replace(" ", "_")
