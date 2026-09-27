@@ -1168,7 +1168,7 @@ async function makeReport(fmt){
   return;
  }
  // PDF از سرور
- if(!store.before||!store.after){alert('عکسها در دسترس نیست');return;}
+ if(!store.before||!store.after){alert('عکسها در دسترس نیست — store.before='+!!store.before+' store.after='+!!store.after);return;}
  try{
   document.getElementById('st').textContent='⏳ در حال ساخت PDF...';
   const fd=new FormData();
@@ -1176,11 +1176,11 @@ async function makeReport(fmt){
   fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
   fd.append('px_per_mm',document.getElementById('ppm').value||0);
   const r=await api('/api/report',{method:'POST',body:fd});
-  if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||r.status));return;}
+  if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||j.error||r.status));return;}
   const blob=await r.blob();
   downloadBlob(blob,'گزارش_تحلیل.pdf');
   document.getElementById('st').textContent='';
- }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
+ }catch(e){console.error('PDF error:',e);document.getElementById('st').textContent='خطا در PDF: '+e.message;}
 }
 function downloadBlob(blob,name){
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
