@@ -271,6 +271,7 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <div id="reportBar" style="display:none">
  <div class="row" style="margin-top:12px">
   <button class="primary" id="mkReportBtn" onclick="makeReport()">📄 تهیه گزارش PDF</button>
+  <button class="go" id="goAnalyzeBtn" onclick="tab(3)" style="font-size:14px">🔍 برو به تحلیل</button>
  </div>
  <p class="muted" id="reportInfo"></p>
 </div>
@@ -1032,9 +1033,17 @@ function togglePick(idx){
 }
 function updateReportBar(){
  const bar=document.getElementById('reportBar'),info=document.getElementById('reportInfo');
- if(can('report')&&pick.ref!==null&&pick.other!==null){
+ const hasPicks=can('report')&&pick.ref!==null&&pick.other!==null;
+ const hasSlots=store.before!==null||store.after!==null;
+ if(hasPicks||hasSlots){
   bar.style.display='block';
-  info.textContent='مرجع: عکس #'+fa(pick.ref+1)+' | دوم: عکس #'+fa(pick.other+1);
+  let parts=[];
+  if(hasPicks)parts.push('گزارش: مرجع #'+fa(pick.ref+1)+' | دوم #'+fa(pick.other+1));
+  if(hasSlots){
+   const a=store.before?'✅ مرجع':'⬜ مرجع',b=store.after?'✅ دوم':'⬜ دوم';
+   parts.push('تحلیل: '+a+' | '+b);
+  }
+  info.textContent=parts.join('  ·  ');
  }else{bar.style.display='none';}
 }
 async function approvePhoto(file,approved){
@@ -1129,9 +1138,7 @@ async function slotFromUrl(url,which){
   const b=await r.blob();
   const dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});
   setSlot(which,dataUrl,'گالری');
-  // نمایش پیام به جای عوض کردن تب
-  const lbl=which==='before'?document.getElementById('lB'):document.getElementById('lA');
-  if(lbl)lbl.textContent='✅ گالری — آماده';
+  updateReportBar();
  }catch(e){alert('خطا در بارگذاری عکس');}
 }
 function openLB(src,cap){
