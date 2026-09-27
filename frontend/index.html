@@ -1139,8 +1139,9 @@ function openLB(src,cap){
 }
 
 /* ===== گزارش PDF / HTML ===== */
-let _lastAnalysis=null; // ذخیره آخرین نتیجه تحلیل
+let _lastAnalysis=null;
 async function makeReport(fmt){
+ alert('makeReport called: fmt='+fmt+' _lastAnalysis='+!!_lastAnalysis+' store.before='+!!store.before+' store.after='+!!store.after);
  if(!_lastAnalysis){alert('ابتدا تحلیل را انجام بده');return;}
  const a=_lastAnalysis;
  if(fmt==='html'){
@@ -1172,15 +1173,18 @@ async function makeReport(fmt){
  try{
   document.getElementById('st').textContent='⏳ در حال ساخت PDF...';
   const fd=new FormData();
-  fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
-  fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
+  const bb=await dataUrlToBlob(store.before);fd.append('before',bb,'before.jpg');
+  const ba=await dataUrlToBlob(store.after);fd.append('after',ba,'after.jpg');
   fd.append('px_per_mm',document.getElementById('ppm').value||0);
+  document.getElementById('st').textContent='⏳ ارسال به سرور...';
   const r=await api('/api/report',{method:'POST',body:fd});
-  if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||j.error||r.status));return;}
+  document.getElementById('st').textContent='⏳ پاسخ: '+r.status;
+  if(!r.ok){const j=await r.json().catch(()=>({}));document.getElementById('st').textContent='خطا: '+(j.detail||j.error||r.status);return;}
   const blob=await r.blob();
+  document.getElementById('st').textContent='⏳ دانلود: '+blob.size+' بایت';
   downloadBlob(blob,'گزارش_تحلیل.pdf');
-  document.getElementById('st').textContent='';
- }catch(e){console.error('PDF error:',e);document.getElementById('st').textContent='خطا در PDF: '+e.message;}
+  document.getElementById('st').textContent='✅ PDF دانلود شد';
+ }catch(e){document.getElementById('st').textContent='خطا در PDF: '+e.message;}
 }
 function downloadBlob(blob,name){
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
