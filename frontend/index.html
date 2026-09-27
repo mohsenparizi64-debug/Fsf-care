@@ -304,10 +304,6 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
  <p id="lA">برای انتخاب کلیک کن</p>
 </div>
 </div>
-<div style="display:flex;gap:8px;margin-top:10px">
- <label style="flex:1;font-size:12px">📎 فایل مرجع: <input type="file" id="fB" accept="image/*" capture="environment" style="font-size:12px"></label>
- <label style="flex:1;font-size:12px">📎 فایل دوم: <input type="file" id="fA" accept="image/*" capture="environment" style="font-size:12px"></label>
-</div>
 <label>پیکسل بر میلیمتر (اختیاری): <input id="ppm" type="number" step="any" value="0" inputmode="decimal"></label>
 <button class="go" onclick="go()">تحلیل تغییر</button>
 <p id="st"></p>
@@ -961,8 +957,6 @@ function fileToSlot(inp,which){
  r.onload=()=>setSlot(which,r.result,'فایل');
  r.readAsDataURL(f);
 }
-document.getElementById('fB').onchange=function(){fileToSlot(this,'before')};
-document.getElementById('fA').onchange=function(){fileToSlot(this,'after')};
 window.addEventListener('resize',drawGrid);
 
 /* ===== گالری ===== */
