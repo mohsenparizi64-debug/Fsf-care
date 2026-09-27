@@ -1140,51 +1140,96 @@ function openLB(src,cap){
 
 /* ===== گزارش PDF / HTML ===== */
 let _lastAnalysis=null;
+async function addGridToImage(dataUrl,gn){
+ if(!dataUrl)return dataUrl;
+ return new Promise(resolve=>{
+  const img=new Image();
+  img.onload=()=>{
+   const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;
+   const x=c.getContext('2d');x.drawImage(img,0,0);
+   x.strokeStyle='rgba(0,255,0,0.85)';x.lineWidth=Math.max(1,Math.round(Math.min(c.width,c.height)/400));
+   for(let i=1;i<gn;i++){x.beginPath();x.moveTo(c.width*i/gn,0);x.lineTo(c.width*i/gn,c.height);x.stroke();
+    x.beginPath();x.moveTo(0,c.height*i/gn);x.lineTo(c.width,c.height*i/gn);x.stroke();}
+   resolve(c.toDataURL('image/jpeg',0.92));
+  };
+  img.onerror=()=>resolve(dataUrl);
+  img.src=dataUrl;
+ });
+}
 async function makeReport(fmt){
- alert('makeReport called: fmt='+fmt+' _lastAnalysis='+!!_lastAnalysis+' store.before='+!!store.before+' store.after='+!!store.after);
  if(!_lastAnalysis){alert('ابتدا تحلیل را انجام بده');return;}
  const a=_lastAnalysis;
  if(fmt==='html'){
-  // تولید HTML در سمت کلاینت
-  let h=`<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>گزارش fsfmonitor</title>
-  <style>body{font-family:Tahoma,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#f5f5f5}
+  const showGrid=prompt('تراکم گرید (عدد بین ۲ تا ۲۰):','۶');
+  const gn=parseInt(showGrid)||6;
+  const srcBefore=store.before||'';
+  const srcAfter=store.after||'';
+  // ساخت تصاویر گریددار
+  const gridImgBefore=await addGridToImage(srcBefore,gn);
+  const gridImgAfter=await addGridToImage(srcAfter,gn);
+  let h=`<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>گزارش fsfmonitor</title>
+  <style>@media print{.no-print{display:none!important}body{background:#fff}}
+  *{box-sizing:border-box}body{font-family:Tahoma,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#f5f5f5;color:#222}
   .card{background:#fff;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.1)}
-  table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{border:1px solid #ddd;padding:8px;text-align:center}
+  table{width:100%;border-collapse:collapse;font-size:14px}th,td{border:1px solid #ddd;padding:8px;text-align:center}
   th{background:#f0f3f1}.pos{color:#1a7f37;font-weight:bold}.neg{color:#b42318;font-weight:bold}
-  img{max-width:100%;border-radius:8px}</style></head><body>
-  <h2 style="color:#1a7f37">📷 گزارش تحلیلی fsfmonitor</h2>
-  <div class="card"><h3>خلاصه</h3>
+  img{max-width:100%;border-radius:8px;display:block;margin:8px auto}
+  .photo-info{font-size:13px;color:#555;margin:4px 0 12px;text-align:center}
+  .grid-toggle{display:flex;gap:10px;align-items:center;justify-content:center;margin:8px 0}
+  .grid-toggle label{font-size:13px;display:flex;align-items:center;gap:4px;cursor:pointer}
+  .photos-row{display:flex;gap:12px;flex-wrap:wrap}.photos-row>div{flex:1;min-width:200px}
+  h2{color:#1a7f37}h3{color:#333;border-bottom:2px solid #1a7f37;padding-bottom:6px}</style></head><body>
+  <h2>📷 گزارش تحلیلی fsfmonitor</h2>
+  <div class="card"><h3>عکس خام — مرجع</h3>
+  <p class="photo-info">📌 <b>عکس مرجع</b></p>
+  <img id="imgRef" src="${gridImgBefore}">
+  <div class="grid-toggle no-print"><label><input type="checkbox" checked onchange="toggleGrid('imgRef',this.checked,'${srcBefore}',${gn})"> نمایش گرید</label>
+  <label>تراکم: <select onchange="changeGrid('imgRef','${srcBefore}',this.value)">${[2,3,4,5,6,8,10,12,15,20].map(n=>`<option value="${n}"${n===gn?' selected':''}>${n}×${n}</option>`).join('')}</select></label></div></div>
+  <div class="card"><h3>عکس خام — دوم</h3>
+  <p class="photo-info">➡ <b>عکس دوم</b></p>
+  <img id="imgSec" src="${gridImgAfter}">
+  <div class="grid-toggle no-print"><label><input type="checkbox" checked onchange="toggleGrid('imgSec',this.checked,'${srcAfter}',${gn})"> نمایش گرید</label>
+  <label>تراکم: <select onchange="changeGrid('imgSec','${srcAfter}',this.value)">${[2,3,4,5,6,8,10,12,15,20].map(n=>`<option value="${n}"${n===gn?' selected':''}>${n}×${n}</option>`).join('')}</select></label></div></div>`;
+  // خلاصه
+  h+=`<div class="card"><h3>خلاصه تغییرات</h3>
   <p>مساحت نیمرخ: <b class="${cls(a.area_px.change_pct)}">${a.area_px.change_pct}٪</b></p>
   <p>پهنا: <b class="${cls(a.bbox_px.width_change_pct)}">${a.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(a.bbox_px.height_change_pct)}">${a.bbox_px.height_change_pct}٪</b></p>
-  <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>
-  <div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
+  <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
+  // رشد جهتی
+  h+=`<div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
   for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
   h+=`</table></div>`;
-  if(a.overlay_url)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${a.overlay_url}"><p style="color:#666">آبی=مرجع، قرمز=دوم</p></div>`;
+  // تصویر تطبیقی
+  if(a.overlay_url)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${a.overlay_url}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
   if(a.note_fa)h+=`<div class="card"><p>${a.note_fa}</p></div>`;
-  h+=`</body></html>`;
+  // اسکریپت گرید
+  h+=`<script>
+  const _gridCache={};
+  function drawGridOnCanvas(srcW,srcH,gn){
+   const c=document.createElement('canvas');c.width=srcW;c.height=srcH;
+   const x=c.getContext('2d');
+   x.strokeStyle='rgba(0,255,0,0.85)';x.lineWidth=2;
+   for(let i=1;i<gn;i++){x.beginPath();x.moveTo(srcW*i/gn,0);x.lineTo(srcW*i/gn,srcH);x.stroke();
+    x.beginPath();x.moveTo(0,srcH*i/gn);x.lineTo(srcW,srcH*i/gn);x.stroke();}
+   return c.toDataURL('image/jpeg',0.92);
+  }
+  function toggleGrid(imgId,show,src,gn){
+   const img=document.getElementById(imgId);
+   if(!img)return;
+   if(show){img.src=drawGridOnCanvas(img.naturalWidth||800, img.naturalHeight||1000, gn);}
+   else{img.src=src;}
+  }
+  function changeGrid(imgId,src,gn){
+   const img=document.getElementById(imgId);if(!img)return;
+   img.src=drawGridOnCanvas(img.naturalWidth||800, img.naturalHeight||1000, parseInt(gn));
+  }
+  <`+'/script></body></html>`;
   const blob=new Blob([h],{type:'text/html;charset=utf-8'});
   downloadBlob(blob,'گزارش_تحلیل.html');
   return;
  }
- // PDF از سرور
- if(!store.before||!store.after){alert('عکسها در دسترس نیست — store.before='+!!store.before+' store.after='+!!store.after);return;}
- try{
-  document.getElementById('st').textContent='⏳ در حال ساخت PDF...';
-  const fd=new FormData();
-  const bb=await dataUrlToBlob(store.before);fd.append('before',bb,'before.jpg');
-  const ba=await dataUrlToBlob(store.after);fd.append('after',ba,'after.jpg');
-  fd.append('px_per_mm',document.getElementById('ppm').value||0);
-  document.getElementById('st').textContent='⏳ ارسال به سرور...';
-  const r=await api('/api/report',{method:'POST',body:fd});
-  document.getElementById('st').textContent='⏳ پاسخ: '+r.status;
-  if(!r.ok){const j=await r.json().catch(()=>({}));document.getElementById('st').textContent='خطا: '+(j.detail||j.error||r.status);return;}
-  const blob=await r.blob();
-  document.getElementById('st').textContent='⏳ دانلود: '+blob.size+' بایت';
-  downloadBlob(blob,'گزارش_تحلیل.pdf');
-  document.getElementById('st').textContent='✅ PDF دانلود شد';
- }catch(e){document.getElementById('st').textContent='خطا در PDF: '+e.message;}
+ // PDF — فعلا غیرفعال
+ alert('گزارش PDF فعلا در دست توسعه است. از گزارش HTML استفاده کن.');
 }
 function downloadBlob(blob,name){
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -1217,7 +1262,7 @@ async function go(){
   _lastAnalysis=j;
   document.getElementById('reportActions').style.display='block';
   document.getElementById('out').scrollIntoView({behavior:'smooth'});
- }catch(e){console.error('go() error:',e);document.getElementById('st').textContent='خطا: '+e.message;}
+ }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
 }
 
 /* ===== پاپآپ انتخاب عکس از گالری برای تحلیل ===== */
