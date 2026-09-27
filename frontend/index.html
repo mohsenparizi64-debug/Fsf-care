@@ -7,21 +7,25 @@
 <title>fsfmonitor — سنجش تغییر</title>
 <style>
 *{box-sizing:border-box}
-body{font-family:Tahoma,sans-serif;margin:0;background:#f2f4f3;color:#222;padding-bottom:env(safe-area-inset-bottom)}
-header{background:#1a7f37;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px}
+body{font-family:Tahoma,sans-serif;margin:0;background:#f2f4f3;color:#222;padding-bottom:env(safe-area-inset-bottom);-webkit-text-size-adjust:100%}
+header{background:#1a7f37;color:#fff;padding:12px 16px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 header h1{margin:0;font-size:18px;flex:1}
 header .who{font-size:12px;opacity:.9}
 header .who button{background:rgba(255,255,255,.2);border:0;color:#fff;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer}
 main{max-width:640px;margin:0 auto;padding:0 12px 12px}
 .card{background:#fff;border:1px solid #e1e4e2;border-radius:14px;padding:14px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .tab{display:none}.tab.on{display:block}
+nav{display:flex;gap:4px;padding:8px 8px 0;max-width:640px;margin:0 auto}
+nav button{flex:1;padding:10px 6px;border:0;border-radius:12px 12px 0 0;font-size:14px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:48px;transition:background .2s,color .2s}
 nav button.on{background:#1a7f37!important;color:#fff!important}
 .muted{color:#666;font-size:12.5px;line-height:1.9}
-input[type=text],input[type=password],input[type=number],select{width:100%;font-size:15px;padding:10px;border:1px solid #ccc;border-radius:10px;margin-top:4px}
-button.primary{background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:13px;font-size:16px;font-weight:bold;cursor:pointer;min-height:52px}
-button.go{width:100%;background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:15px;font-size:18px;font-weight:bold;cursor:pointer;margin-top:12px;min-height:54px}
-button.secondary{background:#e8edea;color:#222;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;min-height:50px}
-button.warn{background:#b42318;color:#fff;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;min-height:50px}
+input[type=text],input[type=password],input[type=number],select{width:100%;font-size:15px;padding:10px;border:1px solid #ccc;border-radius:10px;margin-top:4px;-webkit-appearance:none;appearance:none}
+button.primary{background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:13px 16px;font-size:15px;font-weight:bold;cursor:pointer;min-height:50px;transition:opacity .15s}
+button.primary:active{opacity:.85}
+button.go{width:100%;background:#1a7f37;color:#fff;border:0;border-radius:12px;padding:14px;font-size:17px;font-weight:bold;cursor:pointer;margin-top:12px;min-height:52px;transition:opacity .15s}
+button.go:active{opacity:.85}
+button.secondary{background:#e8edea;color:#222;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;min-height:48px;transition:opacity .15s}
+button.warn{background:#b42318;color:#fff;border:0;border-radius:12px;padding:12px;font-size:15px;font-weight:bold;cursor:pointer;min-height:48px}
 .row{display:flex;gap:8px;margin-top:10px}.row button{flex:1}
 #err{color:#b42318;font-weight:bold;min-height:20px}
 /* دوربین */
@@ -31,8 +35,10 @@ button.warn{background:#b42318;color:#fff;border:0;border-radius:12px;padding:12
 #stage img#ghost{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.4;pointer-events:none;display:none;transform-origin:center}
 label.sl{display:block;font-size:14px;margin:12px 0 2px}
 input[type=range]{width:100%;min-height:44px}
+/* تحلیل: کادرها */
 .slots{display:flex;gap:12px;margin-top:10px}
 .slot{flex:1;border:2px solid #ddd;border-radius:12px;overflow:hidden;text-align:center;font-size:13px;background:#fafafa;cursor:pointer;transition:border-color .2s,box-shadow .2s;min-height:120px;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.slot:active{transform:scale(.98)}
 .slot.ref{border-color:#1a7f37;box-shadow:0 0 0 2px rgba(26,127,55,.15)}
 .slot.ref .slot-label{background:#1a7f37;color:#fff}
 .slot.other{border-color:#b8860b;box-shadow:0 0 0 2px rgba(184,134,11,.15)}
@@ -41,19 +47,18 @@ input[type=range]{width:100%;min-height:44px}
 .slot-empty{font-size:28px;opacity:.3}
 .slot img{width:100%;max-height:160px;object-fit:cover;display:block}
 .slot p{margin:6px 4px;font-size:12px;color:#666}
-#galleryPicker{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;display:none;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0}
+/* گالری picker */
+#galleryPicker{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:300;display:none;flex-direction:column;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0}
 #galleryPicker.on{display:flex}
 #gpHeader{padding:12px 16px;display:flex;align-items:center;gap:8px;background:rgba(0,0,0,.6)}
 #gpHeader h3{flex:1;color:#fff;font-size:15px;margin:0}
 #gpHeader button{background:rgba(255,255,255,.2);color:#fff;border:0;border-radius:10px;padding:8px 14px;font-size:14px;font-weight:bold;cursor:pointer}
-#gpBody{flex:1;overflow-y:auto;padding:10px 12px}
+#gpBody{flex:1;overflow-y:auto;padding:10px 12px;-webkit-overflow-scrolling:touch}
 .gp-item{display:flex;gap:8px;align-items:center;background:rgba(255,255,255,.08);border:2px solid transparent;border-radius:12px;padding:8px;margin-bottom:8px;cursor:pointer;transition:border-color .2s}
 .gp-item:active{border-color:#1a7f37}
 .gp-item img{width:72px;height:90px;object-fit:cover;border-radius:8px;flex:none}
 .gp-item .gp-info{flex:1;font-size:12px;color:#ccc}
 .gp-item .gp-info b{color:#fff;font-size:13px;display:block}
-.slot img{width:100%;max-height:170px;object-fit:cover;display:block}
-.slot p{margin:6px 4px}
 table{border-collapse:collapse;width:100%;margin-top:8px;font-size:14px}
 td,th{border:1px solid #e0e0e0;padding:8px 6px;text-align:center}
 th{background:#f6f8f7}
@@ -69,8 +74,10 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 .tl-meta{flex:1;font-size:13px;min-width:0}
 .tl-meta .dt{font-weight:bold;font-size:14px}
 .tl-meta .mini{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
-.tl-meta .mini button{padding:8px 6px;font-size:12px;border-radius:8px;border:1px solid #1a7f37;background:#fff;color:#1a7f37;cursor:pointer;font-weight:bold}
+.tl-meta .mini button{padding:8px 6px;font-size:12px;border-radius:8px;border:1px solid #1a7f37;background:#fff;color:#1a7f37;cursor:pointer;font-weight:bold;min-height:40px;transition:background .15s}
+.tl-meta .mini button:active{background:#e8f5e9}
 .tl-meta .mini button.warnb{border-color:#b42318;color:#b42318}
+.tl-meta .mini button.warnb:active{background:#fdecea}
 .tl-meta .mini button.okb{border-color:#b8860b;color:#b8860b}
 .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:8px;font-weight:bold}
 .badge.on{background:#1a7f37;color:#fff}
@@ -78,11 +85,11 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 .proj-bar{display:flex;gap:8px;align-items:flex-end}
 .proj-bar select{flex:1}
 .proj-bar .secondary{flex:none;white-space:nowrap}
-#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);display:none;z-index:50;align-items:center;justify-content:center;padding:16px}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;z-index:50;align-items:center;justify-content:center;padding:16px}
 #lightbox.on{display:flex;flex-direction:column}
 #lightbox img{max-width:100%;max-height:80vh;border-radius:10px}
 #lightbox p{color:#fff;font-size:13px}
-/* کامنت‌ها */
+/* کامنتها */
 .cmt{background:#f6f8f7;border-radius:8px;padding:6px 8px;margin-top:4px;font-size:12.5px}
 .cmt b{color:#1a7f37}
 .cmt .del{color:#b42318;cursor:pointer;font-size:11px;float:left}
@@ -93,28 +100,30 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 .switch.on{background:#1a7f37}
 .switch::after{content:'';position:absolute;top:3px;right:3px;width:18px;height:18px;background:#fff;border-radius:50%;transition:.2s}
 .switch.on::after{right:21px}
-/* جدول ماتریس دسترسی — اسکرول افقی روی موبایل */
 .perm-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border:1px solid #e1e4e2;border-radius:10px}
 .perm-table-wrap table{min-width:560px;font-size:12px}
 .perm-table-wrap th{position:sticky;top:0;background:#f0f3f1;z-index:1}
-/* ادمین: کارت‌های کنار هم روی دسکتاپ، زیر هم روی موبایل */
 #p4 .card{margin:10px 0}
 @media(min-width:900px){
  #p4{display:grid;grid-template-columns:1fr 1fr;gap:0 16px;align-items:start}
  #p4 .card{margin:0}
 }
-/* سوئیچ‌ها و دکمه‌ها روی موبایل بزرگ‌تر */
 @media(max-width:520px){
  header{flex-wrap:wrap;padding:10px 12px}
  header h1{font-size:16px}
+ nav{gap:2px;padding:6px 4px 0}
+ nav button{font-size:13px;padding:8px 4px;min-height:44px;border-radius:10px 10px 0 0}
  .tl-item{flex-direction:column;gap:8px}
  .tl-item img{width:100%;height:170px}
  .tl-meta .mini button{flex:1;padding:10px 6px;font-size:13px}
+ .slots{flex-direction:column;gap:10px}
+ .slot{min-height:100px}
  #p4 .row{flex-wrap:wrap}
  #p4 .row>input,#p4 .row>button,#p4 .row>label{flex:1 1 45%}
  .proj-bar{flex-wrap:wrap}
  .proj-bar select{flex:1 1 100%}
  .proj-bar .secondary{flex:1}
+ .gp-item img{width:60px;height:75px}
 }
 /* دوربین تمام‌صفحه */
 #camFullscreen{position:fixed;inset:0;z-index:200;background:#000;display:none}
@@ -191,11 +200,11 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 </div>
 
 <div id="app" style="display:none">
-<header><h1>📷 fsfmonitor</h1><span class="who" id="whoBox"></span></header><nav style="display:flex;gap:8px;padding:10px 12px 0;max-width:640px;margin:0 auto">
-<button id="t1" class="on" style="flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(1)">دوربین</button>
-<button id="t2" style="flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(2)">گالری</button>
-<button id="t3" style="flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(3)">تحلیل</button>
-<button id="t4" style="display:none;flex:1;padding:12px;border:0;border-radius:12px 12px 0 0;font-size:15px;font-weight:bold;background:#dde3e0;cursor:pointer;min-height:50px" onclick="tab(4)">👤 ادمین</button>
+<header><h1>📷 fsfmonitor</h1><span class="who" id="whoBox"></span></header><nav>
+<button id="t1" class="on" onclick="tab(1)">📸 دوربین</button>
+<button id="t2" onclick="tab(2)">🖼 گالری</button>
+<button id="t3" onclick="tab(3)">🔍 تحلیل</button>
+<button id="t4" style="display:none" onclick="tab(4)">👤 ادمین</button>
 </nav>
 <main>
 <!-- ===== TAB 1: CAMERA ===== -->
@@ -268,13 +277,6 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
  <label style="display:flex;align-items:center;gap:6px;font-size:13px;flex:none"><input type="checkbox" id="showGridOv" checked onchange="loadGallery()"> نمایش گرید روی عکس‌ها</label>
 </div>
 <div id="gallery" class="tl"></div>
-<div id="reportBar" style="display:none">
- <div class="row" style="margin-top:12px">
-  <button class="primary" id="mkReportBtn" onclick="makeReport()">📄 تهیه گزارش PDF</button>
-  <button class="go" id="goAnalyzeBtn" onclick="tab(3)" style="font-size:14px">🔍 برو به تحلیل</button>
- </div>
- <p class="muted" id="reportInfo"></p>
-</div>
 </div>
 </div>
 <!-- ===== TAB 3: ANALYZE ===== -->
@@ -312,6 +314,16 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <h4>تصویر تطبیقی <span class="muted">(آبی=مرجع، قرمز=دوم)</span></h4>
 <img id="ov" class="result">
 <p class="muted" id="note"></p>
+</div>
+<div id="reportSection" style="display:none">
+ <div class="card" style="border:2px solid #b8860b">
+  <h3 style="margin-top:0">📄 تهیه گزارش PDF</h3>
+  <p class="muted" style="margin-top:0">برای تهیه گزارش، ابتدا از تب «گالری» دو عکس را با «📋 انتخاب برای گزارش» مشخص کن، سپس برگرد و دکمه زیر را بزن.</p>
+  <div class="row">
+   <button class="primary" id="mkReportBtn" onclick="makeReport()">📄 تهیه گزارش PDF</button>
+  </div>
+  <p class="muted" id="reportInfo"></p>
+ </div>
 </div>
 </div>
 <!-- ===== TAB 4: ADMIN ===== -->
@@ -975,7 +987,7 @@ async function loadGallery(){
    const ap=p.approved?'<span class="badge on">✓ تأییدشده</span>':'<span class="badge off">در انتظار</span>';
    const at=p.at||{};
    const wd=at.weekday?(' '+at.weekday+'، '):'';
-   const stamp=`${wd}${at.date_fa||'—'} — ${at.time_fa||''}`;
+   const stamp=`${wd}${at.date_fa||'—'} — ${at.time_full_fa||at.time_fa||''}`;
    return `
    <div class="tl-item ${p.approved?'approved':''}" id="gi${p.index}">
     <img src="${src}" onclick="openLB(this.src,'${stamp}')" loading="lazy">
@@ -984,8 +996,6 @@ async function loadGallery(){
      <div class="muted">#${fa(p.index+1)} · ${p.source==='upload'?'آپلود':'دوربین'} · ${p.author||'—'} ${ap}</div>
      <div class="mini">
       <button onclick="setGhostFromUrl('${p.url}')">⬅ مرجع شبه</button>
-      <button onclick="slotFromUrl('${p.url}','before')">↩ به تحلیل</button>
-      <button class="warnb" onclick="slotFromUrl('${p.url}','after')">دوم ➡</button>
       <button onclick="togglePick(${p.index})">📋 انتخاب برای گزارش</button>
       <button onclick="toggleComments('${p.file}')">💬 کامنت (${fa((p.comments||[]).length)})</button>
       ${can('approve_photo')&&!p.approved?`<button class="okb" onclick="approvePhoto('${p.file}',true)">✅ تأیید</button>`:''}
@@ -1032,19 +1042,13 @@ function togglePick(idx){
  updateReportBar();
 }
 function updateReportBar(){
- const bar=document.getElementById('reportBar'),info=document.getElementById('reportInfo');
+ const section=document.getElementById('reportSection'),info=document.getElementById('reportInfo');
+ if(!section)return;
  const hasPicks=can('report')&&pick.ref!==null&&pick.other!==null;
- const hasSlots=store.before!==null||store.after!==null;
- if(hasPicks||hasSlots){
-  bar.style.display='block';
-  let parts=[];
-  if(hasPicks)parts.push('گزارش: مرجع #'+fa(pick.ref+1)+' | دوم #'+fa(pick.other+1));
-  if(hasSlots){
-   const a=store.before?'✅ مرجع':'⬜ مرجع',b=store.after?'✅ دوم':'⬜ دوم';
-   parts.push('تحلیل: '+a+' | '+b);
-  }
-  info.textContent=parts.join('  ·  ');
- }else{bar.style.display='none';}
+ if(hasPicks){
+  section.style.display='block';
+  info.textContent='مرجع: عکس #'+fa(pick.ref+1)+' | دوم: عکس #'+fa(pick.other+1);
+ }else{section.style.display='none';}
 }
 async function approvePhoto(file,approved){
  const g=document.getElementById('projSelG').value;
@@ -1130,16 +1134,6 @@ async function setGhostFromUrl(url){
   camMsg('✅ مرجع از گالری تنظیم شد — تصویر زنده را داخل کادر زرد منطبق کن');
   tab(1);
  }catch(e){alert('خطا در بارگذاری عکس مرجع');}
-}
-async function slotFromUrl(url,which){
- try{
-  const r=await fetch(url,{headers:{'Authorization':TOKEN?'Bearer '+TOKEN:''}});
-  if(!r.ok){alert('خطا در بارگذاری عکس');return;}
-  const b=await r.blob();
-  const dataUrl=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(b);});
-  setSlot(which,dataUrl,'گالری');
-  updateReportBar();
- }catch(e){alert('خطا در بارگذاری عکس');}
 }
 function openLB(src,cap){
  document.getElementById('lbImg').src=src;
@@ -1227,7 +1221,7 @@ async function openGalleryPicker(which){
   body.innerHTML=items.map(({p,src})=>{
    const at=p.at||{};
    const wd=at.weekday?(' '+at.weekday+'، '):'';
-   const stamp=`${wd}${at.date_fa||'—'} — ${at.time_fa||''}`;
+   const stamp=`${wd}${at.date_fa||'—'} — ${at.time_full_fa||at.time_fa||''}`;
    const ap=p.approved?'✓':'';
    return `<div class="gp-item" onclick="pickFromGallery('${p.url}','${stamp}')">
     <img src="${src}" loading="lazy">

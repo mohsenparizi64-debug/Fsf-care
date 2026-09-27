@@ -189,7 +189,7 @@ def format_stamp(entry: dict) -> dict:
             if not date_fa and _HAS_JDATE:
                 date_fa = d.strftime("%Y/%m/%d").translate(_FA_DIGITS)
                 time_fa = time_fa or d.strftime("%H:%M").translate(_FA_DIGITS)
-    return {"date_fa": date_fa, "time_fa": time_fa, "weekday": weekday, "fa": f"{weekday}، {date_fa} — {time_fa}" if weekday else f"{date_fa} — {time_fa}"}
+    return {"date_fa": date_fa, "time_fa": time_fa, "weekday": weekday, "fa": f"{weekday}، {date_fa} — {time_fa}" if weekday else f"{date_fa} — {time_fa}", "time_full_fa": f"{time_fa}:{str(iso.split(':')[2][:2]).zfill(2) if ':' in str(iso) else '00'}"}
 
 
 def get_photos(safe: str) -> list:
