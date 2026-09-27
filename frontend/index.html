@@ -1223,7 +1223,8 @@ async function makeReport(fmt){
    const img=document.getElementById(imgId);if(!img)return;
    img.src=drawGridOnCanvas(img.naturalWidth||800, img.naturalHeight||1000, parseInt(gn));
   }
-  <`+'/script></body></html>`;
+  `;
+  h+='</'+'script></body></html>';
   const blob=new Blob([h],{type:'text/html;charset=utf-8'});
   downloadBlob(blob,'گزارش_تحلیل.html');
   return;
