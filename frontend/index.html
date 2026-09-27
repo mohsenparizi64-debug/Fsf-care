@@ -1044,7 +1044,7 @@ function togglePick(idx){
 function updateReportBar(){
  const bar=document.getElementById('reportBar'),info=document.getElementById('reportInfo');
  const section=document.getElementById('reportSection');
- const hasPicks=can('report')&&pick.ref!==null&&pick.other!==null;
+ const hasPicks=pick.ref!==null&&pick.other!==null;
  // گالری: دکمه برو به تحلیل
  if(bar){
   if(hasPicks){bar.style.display='block';if(info)info.textContent='مرجع: #'+fa(pick.ref+1)+' | دوم: #'+fa(pick.other+1);}
