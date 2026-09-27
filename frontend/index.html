@@ -277,13 +277,18 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
  <label style="display:flex;align-items:center;gap:6px;font-size:13px;flex:none"><input type="checkbox" id="showGridOv" checked onchange="loadGallery()"> نمایش گرید روی عکس‌ها</label>
 </div>
 <div id="gallery" class="tl"></div>
+<div id="reportBar" style="display:none">
+ <div class="row" style="margin-top:12px">
+  <button class="go" onclick="tab(3)" style="font-size:14px">🔍 برو به تحلیل</button>
+ </div>
+ <p class="muted" id="reportInfo"></p>
+</div>
 </div>
 </div>
 <!-- ===== TAB 3: ANALYZE ===== -->
 <div id="p3" class="tab">
 <div class="card">
 <h3 style="margin-top:0">عکسهای تحلیل</h3>
-<p class="muted" style="margin-top:0;margin-bottom:8px">روی هر کادر بزن تا عکس را از گالری انتخاب کنی، یا از فایل گوشی آپلود کن:</p>
 <div class="slots">
 <div class="slot ref" id="sB" onclick="openGalleryPicker('before')">
  <div class="slot-label">📌 عکس مرجع</div>
@@ -997,7 +1002,7 @@ async function loadGallery(){
      <div class="mini">
       <button onclick="setGhostFromUrl('${p.url}')">⬅ مرجع شبه</button>
       <button onclick="togglePick(${p.index})">📋 انتخاب برای گزارش</button>
-      <button onclick="toggleComments('${p.file}')">💬 کامنت (${fa((p.comments||[]).length)})</button>
+     <button onclick="toggleComments('${p.file}')">💬 کامنت (${fa((p.comments||[]).length)})</button>
       ${can('approve_photo')&&!p.approved?`<button class="okb" onclick="approvePhoto('${p.file}',true)">✅ تأیید</button>`:''}
       ${can('approve_photo')&&p.approved?`<button class="warnb" onclick="approvePhoto('${p.file}',false)">در انتظار</button>`:''}
       ${can('delete_photo')?`<button class="warnb" onclick="delPhoto('${p.file}')">🗑 حذف</button>`:''}
@@ -1042,13 +1047,16 @@ function togglePick(idx){
  updateReportBar();
 }
 function updateReportBar(){
- const section=document.getElementById('reportSection'),info=document.getElementById('reportInfo');
- if(!section)return;
+ const bar=document.getElementById('reportBar'),info=document.getElementById('reportInfo');
+ const section=document.getElementById('reportSection');
  const hasPicks=can('report')&&pick.ref!==null&&pick.other!==null;
- if(hasPicks){
-  section.style.display='block';
-  info.textContent='مرجع: عکس #'+fa(pick.ref+1)+' | دوم: عکس #'+fa(pick.other+1);
- }else{section.style.display='none';}
+ // گالری: دکمه برو به تحلیل
+ if(bar){
+  if(hasPicks){bar.style.display='block';if(info)info.textContent='مرجع: #'+fa(pick.ref+1)+' | دوم: #'+fa(pick.other+1);}
+  else bar.style.display='none';
+ }
+ // تحلیل: دکمه گزارش PDF
+ if(section){section.style.display=hasPicks?'block':'none';}
 }
 async function approvePhoto(file,approved){
  const g=document.getElementById('projSelG').value;
