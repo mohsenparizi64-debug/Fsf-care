@@ -1199,8 +1199,18 @@ async function makeReport(fmt){
   h+=`<div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
   for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
   h+=`</table></div>`;
-  // تصویر تطبیقی
-  if(a.overlay_url)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${a.overlay_url}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
+  // تصویر تطبیقی — به dataURL تبدیل میشود چون فایل دانلودی لوکال باز میشود
+  let overlayDataUri='';
+  if(a.overlay_url){
+   try{
+    const rr=await fetch(a.overlay_url);
+    if(rr.ok){
+     const ob=await rr.blob();
+     overlayDataUri=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(ob);});
+    }
+   }catch(e){}
+  }
+  if(overlayDataUri)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
   if(a.note_fa)h+=`<div class="card"><p>${a.note_fa}</p></div>`;
   // اسکریپت گرید
   h+=`<script>
