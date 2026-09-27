@@ -6,7 +6,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Res
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.pipeline import analyze
+from app.pipeline import analyze, make_overlay
 from app import projects as prj
 from app import auth
 from app import pdfgen
@@ -385,6 +385,32 @@ async def api_analyze(
     res["overlay_url"] = f"/uploads/{uid}_overlay.jpg"
     res["_tmp"] = {"before": p1, "after": p2, "overlay": os.path.join(UPLOAD_DIR, f"{uid}_overlay.jpg")}
     return res
+
+
+@app.post("/api/preview-overlay")
+async def api_preview_overlay(
+    request: Request,
+    before: UploadFile = File(...),
+    after: UploadFile = File(...),
+    inset: float = Form(0.08),
+):
+    """پیشنمایش overlay بدون تحلیل کامل — فقط تصویر تفاوت."""
+    require_perm(request, "analyze")
+    uid = uuid.uuid4().hex[:8]
+    p1 = os.path.join(UPLOAD_DIR, f"pv_{uid}_before.jpg")
+    p2 = os.path.join(UPLOAD_DIR, f"pv_{uid}_after.jpg")
+    with open(p1, "wb") as f:
+        f.write(await before.read())
+    with open(p2, "wb") as f:
+        f.write(await after.read())
+    try:
+        overlay = make_overlay(p1, p2, inset=float(inset))
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    ov_path = os.path.join(UPLOAD_DIR, f"pv_{uid}_overlay.jpg")
+    cv2.imwrite(ov_path, overlay)
+    # فایل‌های موقت رو پاک نکن چون ممکن دوباره صدا بزنن؛ بعداً cleanup میشه
+    return {"ok": True, "overlay_url": f"/uploads/pv_{uid}_overlay.jpg"}
 
 
 @app.post("/api/report")

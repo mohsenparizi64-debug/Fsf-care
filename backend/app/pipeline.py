@@ -126,6 +126,36 @@ def volume_proxy_solid_of_revolution(mask):
     return vol
 
 
+def make_overlay(baseline_path, followup_path, inset=0.08):
+    """فقط تولید overlay بدون محاسبات اندازه‌گیری. برای پیشنمایش سریع."""
+    g1 = load_gray(baseline_path)
+    g2_raw = load_gray(followup_path)
+    h, w = g1.shape
+    g2 = cv2.resize(g2_raw, (w, h)) if g2_raw.shape != g1.shape else g2_raw
+
+    m1 = segment_grabcut(baseline_path, inset=inset)
+    m2_raw = segment_grabcut(followup_path, inset=inset)
+    m2 = cv2.resize(m2_raw, (w, h), interpolation=cv2.INTER_NEAREST)
+
+    warp = np.eye(2, 3, dtype=np.float32)
+    try:
+        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 40, 1e-4)
+        _, warp = cv2.findTransformECC(m1.astype(np.float32) / 255,
+                                       m2.astype(np.float32) / 255,
+                                       warp, cv2.MOTION_TRANSLATION, criteria, None, 1)
+        m2 = cv2.warpAffine(m2, warp, (w, h),
+                            flags=cv2.INTER_NEAREST + cv2.WARP_INVERSE_MAP)
+    except cv2.error:
+        pass
+
+    c1 = largest_contour(m1)
+    c2 = largest_contour(m2)
+    if c1 is None or c2 is None:
+        raise ValueError("سوژه پیدا نشد؛ inset را تغییر بده")
+
+    return draw_overlay(g1, m1, m2, c1, c2)
+
+
 def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
     g1 = load_gray(baseline_path)
     g2_raw = load_gray(followup_path)
@@ -205,12 +235,25 @@ def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
                                              "after": round(v2 / px_per_mm ** 3, 2)}}
         res["centroid_shift_mm"] = {"dx": round((cx2 - cx1) / px_per_mm, 2),
                                     "dy": round((cy2 - cy1) / px_per_mm, 2)}
-    overlay = draw_overlay(g1, c1, c2)
+    overlay = draw_overlay(g1, m1, m2, c1, c2)
     return res, overlay, (m1, m2)
 
 
-def draw_overlay(gray, c1, c2):
+def draw_overlay(gray, m1, m2, c1, c2):
+    """Overlay با نواحی تفاوت پررنگ + کانتور.
+    قرمز = رشد (تصویر دوم بیشتر از مرجع)
+    آبی = کاهش (تصویر دوم کمتر از مرجع)
+    """
     vis = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-    cv2.drawContours(vis, [c1], -1, (255, 0, 0), 2)   # before = blue
-    cv2.drawContours(vis, [c2], -1, (0, 0, 255), 2)   # after = red
+    mask1 = m1 > 0
+    mask2 = m2 > 0
+    growth = mask2 & ~mask1   # in after but not before → RED
+    shrink = mask1 & ~mask2   # in before but not after → BLUE
+    # نواحی رشد → قرمز نیمه‌شفاف
+    vis[growth] = (vis[growth].astype(np.float32) * 0.3 + np.array([0, 0, 255], dtype=np.float32) * 0.7).astype(np.uint8)
+    # نواحی کاهش → آبی نیمه‌شفاف
+    vis[shrink] = (vis[shrink].astype(np.float32) * 0.3 + np.array([255, 0, 0], dtype=np.float32) * 0.7).astype(np.uint8)
+    # کانتورها روی لایه بالا
+    cv2.drawContours(vis, [c1], -1, (255, 0, 0), 2)   # قبل = آبی
+    cv2.drawContours(vis, [c2], -1, (0, 0, 255), 2)   # بعد = قرمز
     return vis

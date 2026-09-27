@@ -305,8 +305,15 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 </div>
 </div>
 <label>پیکسل بر میلیمتر (اختیاری): <input id="ppm" type="number" step="any" value="0" inputmode="decimal"></label>
-<button class="go" onclick="go()">تحلیل تغییر</button>
+<div class="row">
+ <button class="go" onclick="go()">تحلیل تغییر</button>
+ <button class="secondary" id="ovBtn" onclick="previewOverlay()" style="display:none">🔍 نمایش همپوشانی</button>
+</div>
 <p id="st"></p>
+<div id="pvBox" style="display:none">
+ <h4>پیشنمایش همپوشانی <span class="muted">(آبی=کاهش، قرمز=رشد)</span></h4>
+ <img id="pvImg" class="result">
+</div>
 </div>
 <div class="card" id="out" style="display:none">
 <h3 style="margin-top:0">نتیجه</h3>
@@ -947,6 +954,9 @@ function setSlot(which,dataUrl,label){
  img.src=dataUrl;img.style.display='block';
  if(empty)empty.style.display='none';
  lbl.textContent=label||'';
+ // نمایش دکمه همپوشانی وقتی هر دو عکس انتخاب شدن
+ const ovBtn=document.getElementById('ovBtn');
+ if(ovBtn)ovBtn.style.display=(store.before&&store.after)?'inline-block':'none';
 }
 function fileToSlot(inp,which){
  const f=inp.files[0];if(!f)return;
@@ -1249,6 +1259,26 @@ function downloadBlob(blob,name){
 
 /* ===== تحلیل ===== */
 function cls(v){return v>0?'pos':(v<0?'neg':'');}
+async function previewOverlay(){
+ if(!store.before||!store.after){alert('هر دو عکس مرجع و دوم را مشخص کن');return;}
+ const st=document.getElementById('st');
+ const pvBox=document.getElementById('pvBox');
+ const pvImg=document.getElementById('pvImg');
+ st.textContent='⏳ در حال ساخت پیشنمایش...';
+ pvBox.style.display='none';
+ try{
+  const fd=new FormData();
+  fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
+  fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
+  const r=await api('/api/preview-overlay',{method:'POST',body:fd});
+  const j=await r.json();
+  if(!j.ok){st.textContent='خطا: '+(j.error||j.detail||'');return;}
+  pvImg.src=j.overlay_url;
+  pvBox.style.display='block';
+  st.textContent='';
+  pvBox.scrollIntoView({behavior:'smooth'});
+ }catch(e){st.textContent='خطای ارتباط با سرور';}
+}
 async function go(){
  if(!store.before||!store.after){alert('هر دو عکس مرجع و دوم را مشخص کن');return;}
  document.getElementById('st').textContent='⏳ در حال تحلیل...';
