@@ -316,15 +316,12 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <h4>تصویر تطبیقی <span class="muted">(آبی=مرجع، قرمز=دوم)</span></h4>
 <img id="ov" class="result">
 <p class="muted" id="note"></p>
-</div>
-<div id="reportSection" style="display:none">
- <div class="card" style="border:2px solid #b8860b">
-  <h3 style="margin-top:0">📄 تهیه گزارش PDF</h3>
-  <p class="muted" style="margin-top:0">برای تهیه گزارش، ابتدا از تب «گالری» دو عکس را با «📋 انتخاب برای گزارش» مشخص کن، سپس برگرد و دکمه زیر را بزن.</p>
-  <div class="row">
-   <button class="primary" id="mkReportBtn" onclick="makeReport()">📄 تهیه گزارش PDF</button>
-  </div>
-  <p class="muted" id="reportInfo"></p>
+<hr style="margin:12px 0;border:none;border-top:1px solid #e0e0e0">
+<div id="reportActions" style="display:none">
+ <p style="font-size:13px;font-weight:bold;margin:0 0 8px">📄 تهیه گزارش</p>
+ <div class="row">
+  <button class="primary" onclick="makeReport('pdf')">دانلود PDF</button>
+  <button class="secondary" onclick="makeReport('html')">دانلود HTML</button>
  </div>
 </div>
 </div>
@@ -1043,15 +1040,12 @@ function togglePick(idx){
 }
 function updateReportBar(){
  const bar=document.getElementById('reportBar'),info=document.getElementById('reportInfo');
- const section=document.getElementById('reportSection');
  const hasPicks=pick.ref!==null&&pick.other!==null;
  // گالری: دکمه برو به تحلیل
  if(bar){
   if(hasPicks){bar.style.display='block';if(info)info.textContent='مرجع: #'+fa(pick.ref+1)+' | دوم: #'+fa(pick.other+1);}
   else bar.style.display='none';
  }
- // تحلیل: دکمه گزارش PDF
- if(section){section.style.display=hasPicks?'block':'none';}
 }
 async function approvePhoto(file,approved){
  const g=document.getElementById('projSelG').value;
@@ -1144,22 +1138,53 @@ function openLB(src,cap){
  document.getElementById('lightbox').classList.add('on');
 }
 
-/* ===== گزارش PDF ===== */
-async function makeReport(){
- const g=document.getElementById('projSelG').value;
- if(pick.ref===null||pick.other===null){alert('دو عکس را برای گزارش انتخاب کن');return;}
- const btn=document.getElementById('mkReportBtn');
- btn.disabled=true;btn.textContent='⏳ در حال ساخت گزارش...';
+/* ===== گزارش PDF / HTML ===== */
+let _lastAnalysis=null; // ذخیره آخرین نتیجه تحلیل
+async function makeReport(fmt){
+ if(!_lastAnalysis){alert('ابتدا تحلیل را انجام بده');return;}
+ const a=_lastAnalysis;
+ if(fmt==='html'){
+  // تولید HTML در سمت کلاینت
+  let h=`<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>گزارش fsfmonitor</title>
+  <style>body{font-family:Tahoma,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#f5f5f5}
+  .card{background:#fff;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border:1px solid #ddd;padding:8px;text-align:center}
+  th{background:#f0f3f1}.pos{color:#1a7f37;font-weight:bold}.neg{color:#b42318;font-weight:bold}
+  img{max-width:100%;border-radius:8px}</style></head><body>
+  <h2 style="color:#1a7f37">📷 گزارش تحلیلی fsfmonitor</h2>
+  <div class="card"><h3>خلاصه</h3>
+  <p>مساحت نیمرخ: <b class="${cls(a.area_px.change_pct)}">${a.area_px.change_pct}٪</b></p>
+  <p>پهنا: <b class="${cls(a.bbox_px.width_change_pct)}">${a.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(a.bbox_px.height_change_pct)}">${a.bbox_px.height_change_pct}٪</b></p>
+  <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>
+  <div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
+  for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
+  h+=`</table></div>`;
+  if(a.overlay_url)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${a.overlay_url}"><p style="color:#666">آبی=مرجع، قرمز=دوم</p></div>`;
+  if(a.note_fa)h+=`<div class="card"><p>${a.note_fa}</p></div>`;
+  h+=`</body></html>`;
+  const blob=new Blob([h],{type:'text/html;charset=utf-8'});
+  downloadBlob(blob,'گزارش_تحلیل.html');
+  return;
+ }
+ // PDF از سرور
+ if(!store.before||!store.after){alert('عکسها در دسترس نیست');return;}
  try{
-  const r=await api('/api/report',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({project:g,ref_index:pick.ref,other_index:pick.other})});
+  document.getElementById('st').textContent='⏳ در حال ساخت PDF...';
+  const fd=new FormData();
+  fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
+  fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
+  fd.append('px_per_mm',document.getElementById('ppm').value||0);
+  const r=await api('/api/report',{method:'POST',body:fd});
   if(!r.ok){const j=await r.json().catch(()=>({}));alert('خطا: '+(j.detail||r.status));return;}
   const blob=await r.blob();
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);
-  a.download='گزارش_'+g+'.pdf';
-  document.body.appendChild(a);a.click();a.remove();
- }catch(e){alert('خطای ارتباط با سرور');}
- finally{btn.disabled=false;btn.textContent='📄 تهیه گزارش PDF';}
+  downloadBlob(blob,'گزارش_تحلیل.pdf');
+  document.getElementById('st').textContent='';
+ }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
+}
+function downloadBlob(blob,name){
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+ a.download=name;document.body.appendChild(a);a.click();a.remove();
 }
 
 /* ===== تحلیل ===== */
@@ -1185,6 +1210,8 @@ async function go(){
   document.getElementById('tb').innerHTML=j.directions.map(d=>`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`).join('');
   document.getElementById('ov').src=j.overlay_url;
   document.getElementById('note').textContent=j.note_fa;
+  _lastAnalysis=j;
+  document.getElementById('reportActions').style.display='block';
   document.getElementById('out').scrollIntoView({behavior:'smooth'});
  }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
 }

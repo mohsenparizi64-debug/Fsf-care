@@ -388,41 +388,41 @@ async def api_analyze(
 
 
 @app.post("/api/report")
-async def api_report(request: Request):
-    """گزارش تحلیلی PDF بین دو عکس یک پروژه."""
+async def api_report(
+    request: Request,
+    before: UploadFile = File(...),
+    after: UploadFile = File(...),
+    px_per_mm: float = Form(0),
+):
+    """گزارش تحلیلی PDF بین دو عکس."""
     require_perm(request, "report")
-    body = await request.json()
-    project = prj._safe_name(str(body.get("project", "")))
-    ref_index = body.get("ref_index")
-    other_index = body.get("other_index")
-    if ref_index is None or other_index is None:
-        raise HTTPException(400, "شاخص عکس‌ها لازم است")
-    photos = prj.get_photos(project)
-    if not (0 <= int(ref_index) < len(photos)) or not (0 <= int(other_index) < len(photos)):
-        raise HTTPException(400, "شاخص عکس نامعتبر است")
-    pa, pb = photos[int(ref_index)], photos[int(other_index)]
-    pa_path = os.path.join(prj.DATA_DIR, project, pa["file"])
-    pb_path = os.path.join(prj.DATA_DIR, project, pb["file"])
-
     uid = uuid.uuid4().hex[:8]
+    p1 = os.path.join(UPLOAD_DIR, f"{uid}_before.jpg")
+    p2 = os.path.join(UPLOAD_DIR, f"{uid}_after.jpg")
+    with open(p1, "wb") as f:
+        f.write(await before.read())
+    with open(p2, "wb") as f:
+        f.write(await after.read())
     try:
-        res, overlay, _ = analyze(pa_path, pb_path, px_per_mm=None, inset=0.08)
+        res, overlay, _ = analyze(p1, p2,
+                                  px_per_mm=px_per_mm or None,
+                                  inset=0.08)
     except Exception as e:
-        raise HTTPException(400, f"خطا در تحلیل تصاویر: {e}")
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     ov_path = os.path.join(UPLOAD_DIR, f"{uid}_overlay.jpg")
     cv2.imwrite(ov_path, overlay)
 
     try:
         pdf_bytes = pdfgen.build_report(
-            project=project,
-            photo_a=pa, photo_b=pb,
+            project="تحلیل",
+            photo_a={"at": {"fa": "مرجع"}}, photo_b={"at": {"fa": "دوم"}},
             analysis=res,
-            img_a_path=pa_path, img_b_path=pb_path,
+            img_a_path=p1, img_b_path=p2,
             overlay_path=ov_path,
         )
     except Exception as e:
         raise HTTPException(500, f"خطا در ساخت PDF: {e}")
-    fname = f"report_{pa['file'][:-4]}_{pb['file'][:-4]}.pdf"
+    fname = f"report_{uid}.pdf"
     from urllib.parse import quote as _quote
     fname_ascii = fname.encode("ascii", "ignore").decode("ascii").replace(" ", "_")
     if not fname_ascii or fname_ascii == ".pdf":
