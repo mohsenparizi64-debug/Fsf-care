@@ -1213,7 +1213,7 @@ async function go(){
   _lastAnalysis=j;
   document.getElementById('reportActions').style.display='block';
   document.getElementById('out').scrollIntoView({behavior:'smooth'});
- }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
+ }catch(e){console.error('go() error:',e);document.getElementById('st').textContent='خطا: '+e.message;}
 }
 
 /* ===== پاپآپ انتخاب عکس از گالری برای تحلیل ===== */
