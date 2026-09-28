@@ -2,6 +2,7 @@
 measure area / directional / volume-proxy changes. Only cv2 + numpy."""
 import cv2
 import numpy as np
+import math
 
 
 def _imread_unicode(path, flags=cv2.IMREAD_COLOR):
@@ -248,44 +249,48 @@ def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
     total_shrink_px = int(shrink.sum())
 
     regions = []
-    # اجزای مجزا در ماسک رشد
+    # اجزای مجزا در ماسک رشد و کاهش
     growth_u8 = growth.astype(np.uint8) * 255
-    n, labels, stats, _ = cv2.connectedComponentsWithStats(growth_u8, 8)
-    for i in range(1, n):
-        area = int(stats[i, cv2.CC_STAT_AREA])
-        if area < min_area:
-            continue
-        cx = stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH] / 2
-        cy = stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] / 2
-        # مرکز کانتور برای جهت
-        mask_i = (labels == i).astype(np.uint8) * 255
-        cnts, _ = cv2.findContours(mask_i, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not cnts:
-            continue
-        c = max(cnts, key=cv2.contourArea)
-        M = cv2.moments(c)
-        if M["m00"] > 0:
-            cx = M["m10"] / M["m00"]
-            cy = M["m01"] / M["m00"]
-        # جهت: زاویه مرکز نسبت به مرکز تصویر
-        img_cx, img_cy = w / 2, h / 2
-        dx, dy = cx - img_cx, img_cy - cy  # y معکوس چون بالا=منفی
-        import math
-        ang = math.degrees(math.atan2(dy, dx)) % 360
-        dirs = ["شرق", "شمالشرق", "شمال", "شمالغرب", "غرب", "جنوبغرب", "جنوب", "جنوبشرق"]
-        dir_idx = int(((ang + 22.5) % 360) / 45)
-        direction = dirs[dir_idx]
+    shrink_u8 = shrink.astype(np.uint8) * 255
+    for rtype, mask_u8 in (("growth", growth_u8), ("shrink", shrink_u8)):
+        n, labels, stats, _ = cv2.connectedComponentsWithStats(mask_u8, 8)
+        for i in range(1, n):
+            area = int(stats[i, cv2.CC_STAT_AREA])
+            if area < min_area:
+                continue
+            cx = stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH] / 2
+            cy = stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] / 2
+            # مرکز کانتور برای جهت
+            mask_i = (labels == i).astype(np.uint8) * 255
+            cnts, _ = cv2.findContours(mask_i, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            if not cnts:
+                continue
+            c = max(cnts, key=cv2.contourArea)
+            M = cv2.moments(c)
+            if M["m00"] > 0:
+                cx = M["m10"] / M["m00"]
+                cy = M["m01"] / M["m00"]
+            # جهت: زاویه مرکز نسبت به مرکز تصویر
+            img_cx, img_cy = w / 2, h / 2
+            dx, dy = cx - img_cx, img_cy - cy  # y معکوس چون بالا=منفی
+            ang = math.degrees(math.atan2(dy, dx)) % 360
+            dirs = ["شرق", "شمالشرق", "شمال", "شمالغرب", "غرب", "جنوبغرب", "جنوب", "جنوبشرق"]
+            dir_idx = int(((ang + 22.5) % 360) / 45)
+            direction = dirs[dir_idx]
 
-        pct_of_growth = round(area / total_growth_px * 100, 1) if total_growth_px else 0.0
-        regions.append({
-            "area_px": area,
-            "cx": round(cx, 0),
-            "cy": round(cy, 0),
-            "direction": direction,
-            "pct_of_growth": pct_of_growth,
-            "bbox": [int(stats[i, cv2.CC_STAT_LEFT]), int(stats[i, cv2.CC_STAT_TOP]),
-                     int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT])],
-        })
+            total_px = total_growth_px if rtype == "growth" else total_shrink_px
+            pct = round(area / total_px * 100, 1) if total_px else 0.0
+            regions.append({
+                "area_px": area,
+                "cx": round(cx, 0),
+                "cy": round(cy, 0),
+                "direction": direction,
+                "pct": pct,
+                "type": rtype,
+                "sign": "+" if rtype == "growth" else "-",
+                "bbox": [int(stats[i, cv2.CC_STAT_LEFT]), int(stats[i, cv2.CC_STAT_TOP]),
+                         int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT])],
+            })
 
     # مرتبسازی نزولی بر اساس مساحت
     regions.sort(key=lambda r: r["area_px"], reverse=True)
