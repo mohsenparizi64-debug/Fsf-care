@@ -197,6 +197,109 @@ def make_overlay(baseline_path, followup_path, inset=0.08):
     return vis
 
 
+def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
+    """استخراج مناطق تغییر به صورت اجزای مجزا برای گزارش تفکیکی.
+
+    برمیگرداند: (regions, stats)
+    regions: لیست دیکشنری با شماره، مساحت، مرکز، جهت، درصد
+    stats: مساحت کل رشد/کاهش
+    """
+    im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
+    im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
+    if im1 is None or im2 is None:
+        raise ValueError("cannot read images")
+    h, w = im1.shape[:2]
+    if im2.shape[:2] != (h, w):
+        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
+
+    # Align
+    g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+    g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
+    warp = np.eye(2, 3, dtype=np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-5)
+    try:
+        _, warp = cv2.findTransformECC(g1, g2, warp, cv2.MOTION_AFFINE, criteria, None, 5)
+        im2_aligned = cv2.warpAffine(im2, warp, (w, h),
+                                     flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+    except cv2.error:
+        im2_aligned = im2.copy()
+
+    # مقایسه رنگی Lab
+    lab1 = cv2.cvtColor(im1, cv2.COLOR_BGR2Lab).astype(np.float32)
+    lab2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2Lab).astype(np.float32)
+    color_diff = np.sqrt(np.sum((lab1 - lab2) ** 2, axis=2))
+    color_diff = cv2.GaussianBlur(color_diff, (15, 15), 0)
+    diff_norm = cv2.normalize(color_diff, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    _, change_mask = cv2.threshold(diff_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    change_mask = cv2.morphologyEx(change_mask, cv2.MORPH_CLOSE, kernel)
+    change_mask = cv2.morphologyEx(change_mask, cv2.MORPH_OPEN, kernel)
+
+    gray1 = g1.astype(np.float32)
+    gray2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    bright_diff = gray2 - gray1
+
+    changed = change_mask > 0
+    growth = changed & (bright_diff > 15)
+    shrink = changed & (bright_diff < -15)
+
+    total_growth_px = int(growth.sum())
+    total_shrink_px = int(shrink.sum())
+
+    regions = []
+    # اجزای مجزا در ماسک رشد
+    growth_u8 = growth.astype(np.uint8) * 255
+    n, labels, stats, _ = cv2.connectedComponentsWithStats(growth_u8, 8)
+    for i in range(1, n):
+        area = int(stats[i, cv2.CC_STAT_AREA])
+        if area < min_area:
+            continue
+        cx = stats[i, cv2.CC_STAT_LEFT] + stats[i, cv2.CC_STAT_WIDTH] / 2
+        cy = stats[i, cv2.CC_STAT_TOP] + stats[i, cv2.CC_STAT_HEIGHT] / 2
+        # مرکز کانتور برای جهت
+        mask_i = (labels == i).astype(np.uint8) * 255
+        cnts, _ = cv2.findContours(mask_i, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not cnts:
+            continue
+        c = max(cnts, key=cv2.contourArea)
+        M = cv2.moments(c)
+        if M["m00"] > 0:
+            cx = M["m10"] / M["m00"]
+            cy = M["m01"] / M["m00"]
+        # جهت: زاویه مرکز نسبت به مرکز تصویر
+        img_cx, img_cy = w / 2, h / 2
+        dx, dy = cx - img_cx, img_cy - cy  # y معکوس چون بالا=منفی
+        import math
+        ang = math.degrees(math.atan2(dy, dx)) % 360
+        dirs = ["شرق", "شمالشرق", "شمال", "شمالغرب", "غرب", "جنوبغرب", "جنوب", "جنوبشرق"]
+        dir_idx = int(((ang + 22.5) % 360) / 45)
+        direction = dirs[dir_idx]
+
+        pct_of_growth = round(area / total_growth_px * 100, 1) if total_growth_px else 0.0
+        regions.append({
+            "area_px": area,
+            "cx": round(cx, 0),
+            "cy": round(cy, 0),
+            "direction": direction,
+            "pct_of_growth": pct_of_growth,
+            "bbox": [int(stats[i, cv2.CC_STAT_LEFT]), int(stats[i, cv2.CC_STAT_TOP]),
+                     int(stats[i, cv2.CC_STAT_WIDTH]), int(stats[i, cv2.CC_STAT_HEIGHT])],
+        })
+
+    # مرتبسازی نزولی بر اساس مساحت
+    regions.sort(key=lambda r: r["area_px"], reverse=True)
+    for i, r in enumerate(regions, 1):
+        r["number"] = i
+
+    stats_out = {
+        "total_growth_px": total_growth_px,
+        "total_shrink_px": total_shrink_px,
+        "region_count": len(regions),
+    }
+    return regions, stats_out
+
+
 def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
     g1 = load_gray(baseline_path)
     g2_raw = load_gray(followup_path)

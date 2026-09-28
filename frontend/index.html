@@ -293,9 +293,21 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <div id="reportActions" style="display:none">
  <p style="font-size:13px;font-weight:bold;margin:0 0 8px">📄 تهیه گزارش</p>
  <div class="row">
-  <button class="primary" onclick="makeReport('pdf')">دانلود PDF</button>
-  <button class="secondary" onclick="makeReport('html')">دانلود HTML</button>
+  <button class="primary" onclick="makeReport('html')">دانلود HTML</button>
+  <button class="secondary" id="selRegionsBtn" onclick="selectRegions()">🎯 انتخاب مناطق و گزارش تفکیکی</button>
  </div>
+</div>
+<div id="regionSelector" style="display:none">
+ <hr style="margin:12px 0;border:none;border-top:1px solid #e0e0e0">
+ <p style="font-size:13px;font-weight:bold;margin:0 0 4px">🎯 انتخاب مناطق رشد</p>
+ <p class="muted" style="font-size:12px;margin:0 0 8px">روی شماره هر منطقه روی عکس ضربه بزن تا انتخاب/لغو شه. سپس «تولید گزارش تفکیکی» را بزن.</p>
+ <div id="regionList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+ <img id="regionOv" class="result" usemap="#regionMap" style="cursor:pointer">
+ <map id="regionMap" name="regionMap"></map>
+ <div class="row" style="margin-top:8px">
+  <button class="go" id="genRegionReportBtn" onclick="generateRegionReport()" disabled>📊 تولید گزارش تفکیکی</button>
+ </div>
+ <p class="muted" id="regionMsg"></p>
 </div>
 </div>
 <!-- ===== TAB 4: ADMIN ===== -->
@@ -1218,6 +1230,125 @@ async function makeReport(fmt){
  // PDF — فعلا غیرفعال
  alert('گزارش PDF فعلا در دست توسعه است. از گزارش HTML استفاده کن.');
 }
+
+/* ===== گزارش تفکیکی مناطق ===== */
+let _regions=[], _selRegions=new Set(), _regionOvDataUrl='', _regionImgDims={w:0,h:0};
+
+async function selectRegions(){
+ if(!_lastAnalysis){alert('ابتدا تحلیل را انجام بده');return;}
+ const st=document.getElementById('regionMsg');
+ const box=document.getElementById('regionSelector');
+ const btn=document.getElementById('genRegionReportBtn');
+ const rList=document.getElementById('regionList');
+ st.textContent='⏳ در حال استخراج مناطق...';
+ box.style.display='block';
+ rList.innerHTML='';
+ btn.disabled=true;
+ _selRegions.clear();
+ try{
+  const fd=new FormData();
+  fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
+  fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
+  fd.append('px_per_mm',document.getElementById('ppm').value||0);
+  const r=await api('/api/regions',{method:'POST',body:fd});
+  const j=await r.json();
+  if(!j.ok){st.textContent='خطا: '+(j.error||j.detail||'');return;}
+  _regions=j.regions;
+  if(!_regions.length){st.textContent='منطقه‌ای بزرگتر از ۲۰۰px پیدا نشد';return;}
+  // overlay با شماره‌گذاری مناطق روی canvas
+  const ovImg=document.getElementById('regionOv');
+  const baseOv=_lastAnalysis.overlay_url;
+  if(!baseOv){st.textContent='تصویر overlay در دسترس نیست';return;}
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=baseOv;});
+  _regionImgDims={w:img.naturalWidth,h:img.naturalHeight};
+  // canvas برای رسم شماره‌ها
+  const cv=document.createElement('canvas');
+  cv.width=img.naturalWidth;cv.height=img.naturalHeight;
+  const cx=cv.getContext('2d');
+  cx.drawImage(img,0,0);
+  const sx=cv.width/(_regionImgDims.w||1), sy=cv.height/(_regionImgDims.h||1);
+  // image map برای ضربه زدن
+  let mapHtml='';
+  for(const rg of _regions){
+   const [bx,by,bw,bh]=rg.bbox;
+   // دایره شماره روی مرکز
+   cx.beginPath();
+   cx.arc(rg.cx,rg.cy,26,0,2*Math.PI);
+   cx.fillStyle='rgba(255,255,0,.9)';
+   cx.fill();
+   cx.lineWidth=3;cx.strokeStyle='#000';
+   cx.stroke();
+   cx.fillStyle='#000';
+   cx.font='bold 24px Tahoma,sans-serif';
+   cx.textAlign='center';cx.textBaseline='middle';
+   cx.fillText(fa(rg.number),rg.cx,rg.cy+1);
+   // کانتور منطقه
+   cx.lineWidth=3;cx.strokeStyle='rgba(0,255,255,.9)';
+   cx.strokeRect(bx,by,bw,bh);
+   // map area
+   mapHtml+=`<area shape="rect" coords="${bx},${by},${bx+bw},${by+bh}" onclick="toggleRegion(${rg.number})" style="cursor:pointer">`;
+  }
+  _regionOvDataUrl=cv.toDataURL('image/jpeg',0.92);
+  ovImg.src=_regionOvDataUrl;
+  document.getElementById('regionMap').innerHTML=mapHtml;
+  // لیست چکباکس
+  rList.innerHTML=_regions.map(rg=>
+   `<label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px 8px;cursor:pointer">
+    <input type="checkbox" id="rchk${rg.number}" onchange="toggleRegion(${rg.number},this.checked)">
+    <span>منطقه ${fa(rg.number)}</span>
+   </label>`).join('');
+  st.textContent=_regions.length+' منطقه پیدا شد. انتخاب کن:';
+ }catch(e){st.textContent='خطای ارتباط با سرور';}
+ box.scrollIntoView({behavior:'smooth'});
+}
+
+function toggleRegion(num,fromCheckbox){
+ if(fromCheckbox===true){_selRegions.add(num);}
+ else if(fromCheckbox===false){_selRegions.delete(num);}
+ else{
+  // از روی عکس ضربه زده شده
+  if(_selRegions.has(num)){_selRegions.delete(num);}
+  else{_selRegions.add(num);}
+  const chk=document.getElementById('rchk'+num);
+  if(chk)chk.checked=_selRegions.has(num);
+ }
+ document.getElementById('genRegionReportBtn').disabled=_selRegions.size===0;
+ document.getElementById('regionMsg').textContent=_selRegions.size?fa(_selRegions.size)+' منطقه انتخاب شده':'';
+}
+
+function generateRegionReport(){
+ const sel=_regions.filter(r=>_selRegions.has(r.number));
+ if(!sel.length){alert('حداقل یک منطقه انتخاب کن');return;}
+ const ppm=parseFloat(document.getElementById('ppm').value)||0;
+ let h=`<!DOCTYPE html><html lang="fa" dir="rtl"><head><meta charset="utf-8">
+ <meta name="viewport" content="width=device-width,initial-scale=1">
+ <title>گزارش تفکیکی مناطق</title>
+ <style>
+ *{box-sizing:border-box}body{font-family:Tahoma,sans-serif;max-width:800px;margin:0 auto;padding:20px;background:#f5f5f5;color:#222}
+ .card{background:#fff;border-radius:12px;padding:16px;margin:12px 0;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+ table{width:100%;border-collapse:collapse;font-size:14px}th,td{border:1px solid #ddd;padding:8px;text-align:center}
+ th{background:#f0f3f1}.pos{color:#1a7f37;font-weight:bold}
+ h2{color:#1a7f37}h3{color:#333;border-bottom:2px solid #1a7f37;padding-bottom:6px}
+ .rnum{display:inline-block;background:#ffe082;border:2px solid #333;border-radius:50%;width:28px;height:28px;line-height:28px;text-align:center;font-weight:bold;margin-left:6px}
+ </style></head><body>
+ <h2>🎯 گزارش تفکیکی مناطق رشد</h2>`;
+ // اطلاعات هر منطقه
+ for(const rg of sel){
+  h+=`<div class="card"><h3>منطقه <span class="rnum">${fa(rg.number)}</span></h3>
+  <table><tr><th>مساحت (px)</th><th>مساحت (mm²)</th><th>جهت</th><th>درصد از کل رشد</th><th>موقعیت مرکز</th></tr>
+  <tr><td>${fa(rg.area_px)}</td><td>${rg.area_mm2?fa(rg.area_mm2):'—'}</td><td>${rg.direction}</td>
+  <td class="pos">${fa(rg.pct_of_growth)}٪</td><td>(${fa(rg.cx)}, ${fa(rg.cy)})</td></tr></table></div>`;
+ }
+ // تصویر overlay با شماره‌ها
+ h+=`<div class="card"><h3>تصویر همپوشانی</h3><img src="${_regionOvDataUrl}" style="max-width:100%">
+ <p style="color:#666;font-size:13px">مناطق انتخابی با شماره زرد مشخص شده‌اند</p></div>`;
+ h+='</body></html>';
+ const blob=new Blob([h],{type:'text/html;charset=utf-8'});
+ downloadBlob(blob,'گزارش_تفکیکی_مناطق.html');
+}
+
 function downloadBlob(blob,name){
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
  a.download=name;document.body.appendChild(a);a.click();a.remove();

@@ -6,7 +6,7 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Request, Res
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.pipeline import analyze, make_overlay
+from app.pipeline import analyze, make_overlay, extract_regions
 from app import projects as prj
 from app import auth
 from app import pdfgen
@@ -411,6 +411,40 @@ async def api_preview_overlay(
     cv2.imwrite(ov_path, overlay)
     # فایل‌های موقت رو پاک نکن چون ممکن دوباره صدا بزنن؛ بعداً cleanup میشه
     return {"ok": True, "overlay_url": f"/uploads/pv_{uid}_overlay.jpg"}
+
+
+@app.post("/api/regions")
+async def api_regions(
+    request: Request,
+    before: UploadFile = File(...),
+    after: UploadFile = File(...),
+    px_per_mm: float = Form(0),
+    inset: float = Form(0.08),
+):
+    """استخراج مناطق تغییر برای گزارش تفکیکی."""
+    require_perm(request, "analyze")
+    uid = uuid.uuid4().hex[:8]
+    p1 = os.path.join(UPLOAD_DIR, f"rg_{uid}_before.jpg")
+    p2 = os.path.join(UPLOAD_DIR, f"rg_{uid}_after.jpg")
+    with open(p1, "wb") as f:
+        f.write(await before.read())
+    with open(p2, "wb") as f:
+        f.write(await after.read())
+    try:
+        regions, stats = extract_regions(p1, p2, min_area=200, inset=float(inset))
+    except ValueError as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    # تبدیل px به mm² اگر scale داده شده
+    if px_per_mm and px_per_mm > 0:
+        for r in regions:
+            r["area_mm2"] = round(r["area_px"] / (px_per_mm ** 2), 2)
+    return {
+        "ok": True,
+        "regions": regions,
+        "stats": stats,
+        "px_per_mm": px_per_mm,
+        "tmp": {"before": p1, "after": p2},
+    }
 
 
 @app.post("/api/report")
