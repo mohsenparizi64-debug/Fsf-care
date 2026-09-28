@@ -75,7 +75,8 @@ def require_perm(request: Request, key: str):
 @app.get("/", response_class=HTMLResponse)
 def index():
     with open(os.path.join(FRONTEND_DIR, "index.html"), encoding="utf-8") as f:
-        return f.read()
+        content = f.read()
+    return HTMLResponse(content, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 JDTIME = prj._HAS_JDATE

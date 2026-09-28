@@ -1399,6 +1399,10 @@ async function go(){
   document.getElementById('note').textContent=j.note_fa;
   _lastAnalysis=j;
   document.getElementById('reportActions').style.display='block';
+  // ریست region selector
+  const rs=document.getElementById('regionSelector');
+  if(rs)rs.style.display='none';
+  _regions=[];_selRegions.clear();
   document.getElementById('out').scrollIntoView({behavior:'smooth'});
  }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
 }
