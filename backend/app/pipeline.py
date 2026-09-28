@@ -127,33 +127,74 @@ def volume_proxy_solid_of_revolution(mask):
 
 
 def make_overlay(baseline_path, followup_path, inset=0.08):
-    """فقط تولید overlay بدون محاسبات اندازه‌گیری. برای پیشنمایش سریع."""
-    g1 = load_gray(baseline_path)
-    g2_raw = load_gray(followup_path)
-    h, w = g1.shape
-    g2 = cv2.resize(g2_raw, (w, h)) if g2_raw.shape != g1.shape else g2_raw
+    """Overlay مبتنی بر مقایسه رنگی در فضای Lab — دقیق از mask comparison.
 
-    m1 = segment_grabcut(baseline_path, inset=inset)
-    m2_raw = segment_grabcut(followup_path, inset=inset)
-    m2 = cv2.resize(m2_raw, (w, h), interpolation=cv2.INTER_NEAREST)
+    مراحل:
+    1. خواندن هر دو تصویر رنگی
+    2. Align با ECC (روی grayscale)
+    3. مقایسه پیکسلی در Lab color space
+    4. Gaussian blur + Otsu threshold
+    5. تشخیص جهت: رشد (روشنتر) = قرمز، کاهش (تیرهتر) = آبی
+    """
+    im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
+    im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
+    if im1 is None or im2 is None:
+        raise ValueError("cannot read images")
+    h, w = im1.shape[:2]
+    if im2.shape[:2] != (h, w):
+        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
 
+    # ── 1) Align با ECC روی grayscale ──
+    g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+    g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
     warp = np.eye(2, 3, dtype=np.float32)
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-5)
     try:
-        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 40, 1e-4)
-        _, warp = cv2.findTransformECC(m1.astype(np.float32) / 255,
-                                       m2.astype(np.float32) / 255,
-                                       warp, cv2.MOTION_TRANSLATION, criteria, None, 1)
-        m2 = cv2.warpAffine(m2, warp, (w, h),
-                            flags=cv2.INTER_NEAREST + cv2.WARP_INVERSE_MAP)
+        _, warp = cv2.findTransformECC(g1, g2, warp, cv2.MOTION_AFFINE, criteria, None, 5)
+        im2_aligned = cv2.warpAffine(im2, warp, (w, h),
+                                     flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
     except cv2.error:
-        pass
+        im2_aligned = im2.copy()
 
-    c1 = largest_contour(m1)
-    c2 = largest_contour(m2)
-    if c1 is None or c2 is None:
-        raise ValueError("سوژه پیدا نشد؛ inset را تغییر بده")
+    # ── 2) مقایسه رنگی در Lab ──
+    lab1 = cv2.cvtColor(im1, cv2.COLOR_BGR2Lab).astype(np.float32)
+    lab2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2Lab).astype(np.float32)
+    color_diff = np.sqrt(np.sum((lab1 - lab2) ** 2, axis=2))
 
-    return draw_overlay(g1, m1, m2, c1, c2)
+    # ── 3) Blur + threshold ──
+    color_diff = cv2.GaussianBlur(color_diff, (15, 15), 0)
+    diff_norm = cv2.normalize(color_diff, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    _, change_mask = cv2.threshold(diff_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+
+    # حذف نویز
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+    change_mask = cv2.morphologyEx(change_mask, cv2.MORPH_CLOSE, kernel)
+    change_mask = cv2.morphologyEx(change_mask, cv2.MORPH_OPEN, kernel)
+
+    # ── 4) تشخیص جهت با روشنایی ──
+    gray1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    gray2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    bright_diff = gray2 - gray1  # مثبت = روشنتر در دوم
+
+    changed = change_mask > 0
+    growth = changed & (bright_diff > 15)   # روشنتر = رشد
+    shrink = changed & (bright_diff < -15)  # تیرهتر = کاهش
+
+    # ── 5) رسم ──
+    vis = im1.copy()
+    # رشد → قرمز نیمه‌شفاف
+    vis[growth] = (vis[growth].astype(np.float32) * 0.3 +
+                   np.array([0, 0, 255], dtype=np.float32) * 0.7).astype(np.uint8)
+    # کاهش → آبی نیمه‌شفاف
+    vis[shrink] = (vis[shrink].astype(np.float32) * 0.3 +
+                   np.array([255, 0, 0], dtype=np.float32) * 0.7).astype(np.uint8)
+
+    # کانتور دور نواحی تغییر
+    all_changed = (growth | shrink).astype(np.uint8) * 255
+    contours, _ = cv2.findContours(all_changed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cv2.drawContours(vis, contours, -1, (0, 255, 255), 2)
+
+    return vis
 
 
 def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
