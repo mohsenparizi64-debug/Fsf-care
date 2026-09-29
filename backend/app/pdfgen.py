@@ -207,6 +207,32 @@ def build_report(
             story.append(Paragraph(_rtl("تصویر تطبیقی"), st_h))
             story.append(im)
             story.append(Paragraph(_rtl("(آبی = مرجع، قرمز = دوم)"), st_small))
+    # نقاط انتخابی تحلیل محدود
+    sregs = analysis.get("regions") or []
+    if analysis.get("scoped") and sregs:
+        story.append(Spacer(1, 4 * mm))
+        story.append(Paragraph(_rtl("🎯 تفکیکی نقاط انتخاب‌شده"), st_h))
+        rrows = [[_rtl("#"), _rtl("نوع"), _rtl("مرجع (px²)"), _rtl("دوم (px²)"),
+                  _rtl("تغییر"), _rtl("جهت")]]
+        for rg in sregs:
+            ap = rg.get("area_px", {})
+            rrows.append([
+                _fa_digits(rg.get("number")),
+                _rtl("رشد (+)" if rg.get("type") == "growth" else "کاهش (−)"),
+                _fa_digits(ap.get("before")), _fa_digits(ap.get("after")),
+                _pct(ap.get("change_pct")), _rtl(str(rg.get("direction", ""))),
+            ])
+        rtbl = Table(rrows, colWidths=[14 * mm, 26 * mm, 32 * mm, 32 * mm, 26 * mm, 28 * mm])
+        rtbl.setStyle(TableStyle([
+            ("FONTNAME", (0, 0), (-1, -1), "Vazir"),
+            ("FONTNAME", (0, 0), (-1, 0), "Vazir-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.6, colors.HexColor("#cccccc")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef3f0")),
+        ]))
+        story.append(rtbl)
+        story.append(Spacer(1, 4 * mm))
     note = analysis.get("note_fa")
     if note:
         story.append(Spacer(1, 3 * mm))

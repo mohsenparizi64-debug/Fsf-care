@@ -278,14 +278,21 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <p id="st"></p>
 <div id="pvBox" style="display:none">
  <h4>پیشنمایش همپوشانی <span class="muted">(آبی=کاهش، قرمز=رشد)</span></h4>
- <img id="pvImg" class="result">
+ <img id="pvImg" class="result" style="cursor:pointer">
+ <p class="muted" style="font-size:12px;margin:6px 0">روی شماره هر نقطه ضربه بزن تا انتخاب/لغو شه، بعد «تحلیل تغییر» را بزن.</p>
+ <div id="pvRegionList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+ <p class="muted" id="pvRegionMsg"></p>
 </div>
 </div>
 <div class="card" id="out" style="display:none">
 <h3 style="margin-top:0">نتیجه</h3>
 <div id="sum"></div>
-<h4>رشد جهتی (٪)</h4>
-<table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr><tbody id="tb"></tbody></table>
+<div id="regSec" style="display:none">
+<h4>🎯 نقاط انتخاب‌شده</h4>
+<table><tr><th>#</th><th>نوع</th><th>مرجع (px²)</th><th>دوم (px²)</th><th>تغییر</th><th>جهت</th></tr><tbody id="tbReg"></tbody></table>
+</div>
+<h4 id="dirH" style="display:none">رشد جهتی (٪)</h4>
+<table id="dirT" style="display:none"><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr><tbody id="tb"></tbody></table>
 <h4>تصویر تطبیقی <span class="muted">(آبی=مرجع، قرمز=دوم)</span></h4>
 <img id="ov" class="result">
 <p class="muted" id="note"></p>
@@ -295,17 +302,7 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
  <div class="row">
   <button class="primary" onclick="makeReport('html')">دانلود HTML</button>
   <button class="primary" onclick="makeReport('pdf')">دانلود PDF</button>
-  <button class="secondary" id="selRegionsBtn" onclick="selectRegions()">🎯 انتخاب نقاط تغییر</button>
  </div>
-</div>
-<div id="regionSelector" style="display:none">
- <hr style="margin:12px 0;border:none;border-top:1px solid #e0e0e0">
- <p style="font-size:13px;font-weight:bold;margin:0 0 4px">🎯 تفکیک نقاط تغییر</p>
- <p class="muted" style="font-size:12px;margin:0 0 8px">روی شماره هر منطقه روی عکس ضربه بزن تا انتخاب/لغو شه. این نقاط در گزارش HTML پایین اضافه میشن.</p>
- <div id="regionList" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
- <img id="regionOv" class="result" usemap="#regionMap" style="cursor:pointer">
- <map id="regionMap" name="regionMap"></map>
- <p class="muted" id="regionMsg"></p>
 </div>
 </div>
 <!-- ===== TAB 4: ADMIN ===== -->
@@ -933,6 +930,11 @@ async function createProject(){
 /* ===== ثبت عکس از فایل (تب تحلیل) ===== */
 function setSlot(which,dataUrl,label){
  store[which]=dataUrl;
+ // عوض شدن عکس، انتخاب‌های نقاط زوج قبلی را باطل می‌کند
+ _regions=[];_selRegions.clear();_regionBaseImg=null;_pvBaseImg=null;
+ const prm=document.getElementById('pvRegionMsg');if(prm)prm.textContent='';
+ const prl=document.getElementById('pvRegionList');if(prl)prl.innerHTML='';
+ const pvb=document.getElementById('pvBox');if(pvb)pvb.style.display='none';
  const slot=which==='before'?document.getElementById('sB'):document.getElementById('sA');
  const img=which==='before'?document.getElementById('iB'):document.getElementById('iA');
  const empty=slot.querySelector('.slot-empty');
@@ -1188,15 +1190,19 @@ async function makeReport(fmt){
   <img id="imgSec" src="${gridImgAfter}">
   <div class="grid-toggle no-print"><label><input type="checkbox" checked onchange="toggleGrid('imgSec',this.checked,'${srcAfter}',${gn})"> نمایش گرید</label>
   <label>تراکم: <select onchange="changeGrid('imgSec','${srcAfter}',this.value)">${[2,3,4,5,6,8,10,12,15,20].map(n=>`<option value="${n}"${n===gn?' selected':''}>${n}×${n}</option>`).join('')}</select></label></div></div>`;
-  // خلاصه
+  // خلاصه — برای تحلیل محدود فقط نقاط انتخابی، بدون پهنا/جهت کلی
   h+=`<div class="card"><h3>خلاصه تغییرات</h3>
-  <p>مساحت نیمرخ: <b class="${cls(a.area_px.change_pct)}">${a.area_px.change_pct}٪</b></p>
-  <p>پهنا: <b class="${cls(a.bbox_px.width_change_pct)}">${a.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(a.bbox_px.height_change_pct)}">${a.bbox_px.height_change_pct}٪</b></p>
-  <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
-  // رشد جهتی
-  h+=`<div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
-  for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
-  h+=`</table></div>`;
+  <p>مساحت ${a.scoped?'نقاط انتخابی':'نیمرخ'}: <b class="${cls(a.area_px.change_pct)}">${a.area_px.change_pct}٪</b></p>`;
+  if(a.scoped){
+   h+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
+  }else{
+   h+=`<p>پهنا: <b class="${cls(a.bbox_px.width_change_pct)}">${a.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(a.bbox_px.height_change_pct)}">${a.bbox_px.height_change_pct}٪</b></p>
+   <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
+   // رشد جهتی فقط برای تحلیل کلی
+   h+=`<div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
+   for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
+   h+=`</table></div>`;
+  }
   // تصویر تطبیقی — به dataURL تبدیل میشود چون فایل دانلودی لوکال باز میشود
   let overlayDataUri='';
   if(a.overlay_url){
@@ -1210,24 +1216,22 @@ async function makeReport(fmt){
   }
   if(overlayDataUri)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
   if(a.note_fa)h+=`<div class="card"><p>${a.note_fa}</p></div>`;
-  // ── تفکیکی نقاط انتخابی ──
-  if(_selRegions.size){
-   const sel=_regions.filter(r=>_selRegions.has(r.number));
-   h+=`<div class="card"><h3>🎯 تفکیکی نقاط تغییر (${fa(sel.length)} نقطه)</h3>
-   <p style="color:#666;font-size:13px">این نقاط، ${fa(sel.length)} نقطه با بزرگترین تغییرات نسبت به عکس مرجع هستند.</p>`;
-   h+=`<table><tr><th>#</th><th>نوع تغییر</th><th>مساحت (px)</th><th>مساحت (mm²)</th><th>جهت</th><th>درصد از کل</th><th>موقعیت مرکز</th></tr>`;
-   for(const rg of sel){
+  // ── تفکیکی نقاط تحلیل‌شده (اعداد واقعی مرجع/دوم داخل هر نقطه) ──
+  if(a.scoped&&(a.regions||[]).length){
+   h+=`<div class="card"><h3>🎯 تفکیکی نقاط انتخابی (${fa(a.regions.length)} نقطه)</h3>`;
+   h+=`<table><tr><th>#</th><th>نوع تغییر</th><th>مرجع (px²)</th><th>دوم (px²)</th><th>تغییر</th><th>جهت</th></tr>`;
+   for(const rg of a.regions){
     const isGrowth=rg.type==='growth';
+    const ap=rg.area_px||{};
     h+=`<tr><td><b>${fa(rg.number)}</b></td>
     <td><b style="color:${isGrowth?'#1a7f37':'#b42318'}">${isGrowth?'📈 رشد (+)':'📉 کاهش (−)'}</b></td>
-    <td>${fa(rg.area_px)}</td>
-    <td>${rg.area_mm2?fa(rg.area_mm2):'—'}</td>
-    <td>${rg.direction}</td>
-    <td class="${isGrowth?'pos':'neg'}">${rg.sign}${fa(rg.pct)}٪</td>
-    <td>(${fa(rg.cx)}, ${fa(rg.cy)})</td></tr>`;
+    <td>${fa(ap.before)}</td>
+    <td>${fa(ap.after)}</td>
+    <td class="${cls(ap.change_pct)}">${ap.change_pct}٪</td>
+    <td>${rg.direction}</td></tr>`;
    }
    h+='</table></div>';
-   // overlay با شماره‌ها
+   // overlay با شماره‌ها (انتخابی پررنگ)
    if(_regionOvDataUrl)h+=`<div class="card"><h3>تصویر همپوشانی با نقاط انتخابی</h3><img src="${_regionOvDataUrl}" style="max-width:100%"><p style="color:#666;font-size:13px">دایره سبز = رشد (+) | دایره قرمز = کاهش (−)</p></div>`;
   }
   // اسکریپت گرید
@@ -1265,6 +1269,7 @@ async function makeReport(fmt){
   fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
   fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
   fd.append('px_per_mm',document.getElementById('ppm').value||0);
+  fd.append('selected',[..._selRegions].sort((a,b)=>a-b).join(','));
   const r=await api('/api/report',{method:'POST',body:fd});
   if(!r.ok){
    const j=await r.json().catch(()=>({}));
@@ -1285,18 +1290,65 @@ async function makeReport(fmt){
  }
 }
 
-/* ===== تفکیکی نقاط تغییر ===== */
-let _regions=[], _selRegions=new Set(), _regionOvDataUrl='';
+/* ===== تفکیکی نقاط تغییر (روی پیش‌نمایش) ===== */
+let _regions=[], _selRegions=new Set(), _regionOvDataUrl='', _regionBaseImg=null, _pvBaseImg=null;
 
-async function selectRegions(auto){
- if(!_lastAnalysis){alert('ابتدا تحلیل را انجام بده');return;}
- const st=document.getElementById('regionMsg');
- const box=document.getElementById('regionSelector');
- const rList=document.getElementById('regionList');
- st.textContent='⏳ در حال استخراج نقاط...';
- box.style.display='block';
+function drawNumbered(img, regions, selSet, dimUns, targetId){
+ // رسم شماره‌ها روی overlay؛ در نتیجه تحلیل، نقاط انتخاب‌نشده کم‌رنگ می‌شن
+ if(!img||!regions.length)return '';
+ const cv=document.createElement('canvas');
+ cv.width=img.naturalWidth;cv.height=img.naturalHeight;
+ const cx=cv.getContext('2d');
+ cx.drawImage(img,0,0);
+ for(const rg of regions){
+  const [bx,by,bw,bh]=rg.bbox;
+  const sel=!selSet||selSet.has(rg.number);
+  const col=rg.type==='growth'?'rgba(0,200,0,.95)':'rgba(220,30,30,.95)';
+  if(!sel&&dimUns){
+   // کم‌رنگ: فقط کادر خاکستری، بدون شماره
+   cx.lineWidth=2;cx.strokeStyle='rgba(150,150,150,.45)';
+   cx.strokeRect(bx,by,bw,bh);
+   continue;
+  }
+  // کانتور منطقه
+  cx.lineWidth=sel&&selSet&&selSet.size?4:2;
+  cx.strokeStyle=sel&&selSet&&selSet.size?'rgba(0,120,0,1)':col;
+  cx.strokeRect(bx,by,bw,bh);
+  // حلقه انتخاب (سبز ضخیم) دور نقاط انتخاب‌شده
+  if(sel&&selSet&&selSet.size){
+   cx.beginPath();
+   cx.arc(rg.cx,rg.cy,34,0,2*Math.PI);
+   cx.lineWidth=5;cx.strokeStyle='rgba(0,180,0,1)';
+   cx.stroke();
+  }
+  // دایره شماره روی مرکز — سبز برای رشد، قرمز برای کاهش
+  cx.beginPath();
+  cx.arc(rg.cx,rg.cy,24,0,2*Math.PI);
+  cx.fillStyle=col;
+  cx.fill();
+  cx.lineWidth=3;cx.strokeStyle='#fff';
+  cx.stroke();
+  cx.fillStyle='#fff';
+  cx.font='bold 22px Tahoma,sans-serif';
+  cx.textAlign='center';cx.textBaseline='middle';
+  cx.fillText(fa(rg.number),rg.cx,rg.cy+1);
+  // علامت + یا −
+  cx.font='bold 20px Tahoma,sans-serif';
+  cx.fillText(rg.sign,rg.cx+22,rg.cy-20);
+ }
+ const url=cv.toDataURL('image/jpeg',0.92);
+ document.getElementById(targetId).src=url;
+ return url;
+}
+
+async function loadPreviewRegions(baseOvUrl){
+ // استخراج ۱۰ نقطه روی همون overlay پیش‌نمایش (خودکار، بعد از نمایش تصویر)
+ const msg=document.getElementById('pvRegionMsg');
+ const rList=document.getElementById('pvRegionList');
+ msg.textContent='⏳ در حال استخراج نقاط...';
  rList.innerHTML='';
  _selRegions.clear();
+ _regionBaseImg=null;_pvBaseImg=null;
  try{
   const fd=new FormData();
   fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
@@ -1304,49 +1356,14 @@ async function selectRegions(auto){
   fd.append('px_per_mm',document.getElementById('ppm').value||0);
   const r=await api('/api/regions',{method:'POST',body:fd});
   const j=await r.json();
-  if(!j.ok){st.textContent='خطا: '+(j.error||j.detail||'');return;}
+  if(!j.ok){msg.textContent='خطا: '+(j.error||j.detail||'');return;}
   _regions=j.regions;
-  if(!_regions.length){st.textContent='نقطه‌ای بزرگتر از ۲۰۰px پیدا نشد';return;}
-  // overlay با شماره‌گذاری مناطق روی canvas
-  const baseOv=_lastAnalysis.overlay_url;
-  if(!baseOv){st.textContent='تصویر overlay در دسترس نیست';return;}
+  if(!_regions.length){msg.textContent='نقطه‌ای بزرگتر از ۲۰۰px پیدا نشد';return;}
   const img=new Image();
   img.crossOrigin='anonymous';
-  await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=baseOv;});
-  const cv=document.createElement('canvas');
-  cv.width=img.naturalWidth;cv.height=img.naturalHeight;
-  const cx=cv.getContext('2d');
-  cx.drawImage(img,0,0);
-  // image map برای ضربه زدن
-  let mapHtml='';
-  for(const rg of _regions){
-   const [bx,by,bw,bh]=rg.bbox;
-   // دایره شماره روی مرکز — سبز برای رشد، قرمز برای کاهش
-   const col=rg.type==='growth'?'rgba(0,200,0,.95)':'rgba(220,30,30,.95)';
-   cx.beginPath();
-   cx.arc(rg.cx,rg.cy,24,0,2*Math.PI);
-   cx.fillStyle=col;
-   cx.fill();
-   cx.lineWidth=3;cx.strokeStyle='#fff';
-   cx.stroke();
-   cx.fillStyle='#fff';
-   cx.font='bold 22px Tahoma,sans-serif';
-   cx.textAlign='center';cx.textBaseline='middle';
-   cx.fillText(fa(rg.number),rg.cx,rg.cy+1);
-   // علامت + یا −
-   cx.font='bold 20px Tahoma,sans-serif';
-   cx.fillText(rg.sign,rg.cx+22,rg.cy-20);
-   // کانتور منطقه
-   cx.lineWidth=2;cx.strokeStyle=col;
-   cx.strokeRect(bx,by,bw,bh);
-   mapHtml+=`<area shape="rect" coords="${bx},${by},${bx+bw},${by+bh}" onclick="toggleRegion(${rg.number})" style="cursor:pointer">`;
-  }
-  _regionOvDataUrl=cv.toDataURL('image/jpeg',0.92);
-  document.getElementById('regionOv').src=_regionOvDataUrl;
-  document.getElementById('regionMap').innerHTML=mapHtml;
-  // overlay اصلی تحلیل رو هم شماره‌گذاری کن (باگ: نقاط روی عکس اصلی نشون داده نمیشدن)
-  const ovMain=document.getElementById('ov');
-  if(ovMain)ovMain.src=_regionOvDataUrl;
+  await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=baseOvUrl;});
+  _pvBaseImg=img;_regionBaseImg=img;
+  _regionOvDataUrl=drawNumbered(img,_regions,_selRegions,false,'pvImg');
   // لیست چکباکس با علامت
   rList.innerHTML=_regions.map(rg=>
    `<label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px 8px;cursor:pointer">
@@ -1354,9 +1371,23 @@ async function selectRegions(auto){
     <span style="color:${rg.type==='growth'?'#1a7f37':'#b42318'};font-weight:bold">${rg.sign}</span>
     <span>نقطه ${fa(rg.number)}</span>
    </label>`).join('');
-  st.textContent=fa(_regions.length)+' نقطه با بزرگترین تغییرات — انتخاب کن:';
- }catch(e){st.textContent='خطای ارتباط با سرور';}
- box.scrollIntoView({behavior:'smooth'});
+  // ضربه روی تصویر: مختصات نمایشی → مختصات واقعی (مقیاس‌پذیر، سازگار موبایل)
+  const rov=document.getElementById('pvImg');
+  rov.onclick=(ev)=>{
+   if(!_pvBaseImg||!_regions.length)return;
+   const rect=rov.getBoundingClientRect();
+   const sx=_pvBaseImg.naturalWidth/Math.max(1,rect.width);
+   const sy=_pvBaseImg.naturalHeight/Math.max(1,rect.height);
+   const px=(ev.clientX-rect.left)*sx, py=(ev.clientY-rect.top)*sy;
+   let best=null,bestD=1e9;
+   for(const rg of _regions){
+    const d=Math.hypot(px-rg.cx,py-rg.cy);
+    if(d<bestD){bestD=d;best=rg;}
+   }
+   if(best&&bestD<Math.max(40,_pvBaseImg.naturalWidth*0.05))toggleRegion(best.number);
+  };
+  msg.textContent=fa(_regions.length)+' نقطه با بزرگترین تغییرات — انتخاب کن:';
+ }catch(e){msg.textContent='خطای ارتباط با سرور';}
 }
 
 function toggleRegion(num,fromCheckbox){
@@ -1368,7 +1399,8 @@ function toggleRegion(num,fromCheckbox){
   const chk=document.getElementById('rchk'+num);
   if(chk)chk.checked=_selRegions.has(num);
  }
- document.getElementById('regionMsg').textContent=_selRegions.size?fa(_selRegions.size)+' نقطه انتخاب شده — دانلود HTML را بزن':'';
+ if(_pvBaseImg)_regionOvDataUrl=drawNumbered(_pvBaseImg,_regions,_selRegions,false,'pvImg');
+ document.getElementById('pvRegionMsg').textContent=_selRegions.size?fa(_selRegions.size)+' نقطه انتخاب شده — «تحلیل تغییر» را بزن':'';
 }
 
 function downloadBlob(blob,name){
@@ -1385,6 +1417,9 @@ async function previewOverlay(){
  const pvImg=document.getElementById('pvImg');
  st.textContent='⏳ در حال ساخت پیشنمایش...';
  pvBox.style.display='none';
+ document.getElementById('pvRegionMsg').textContent='';
+ document.getElementById('pvRegionList').innerHTML='';
+ _regions=[];_selRegions.clear();_pvBaseImg=null;_regionBaseImg=null;
  try{
   const fd=new FormData();
   fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
@@ -1394,39 +1429,56 @@ async function previewOverlay(){
   if(!j.ok){st.textContent='خطا: '+(j.error||j.detail||'');return;}
   pvImg.src=j.overlay_url;
   pvBox.style.display='block';
-  st.textContent='';
+  st.textContent='✅ تصویر آماده شد — حالا نقاط را انتخاب کن';
   pvBox.scrollIntoView({behavior:'smooth'});
+  // اول تصویر سریع نمایش داده میشه، بعد ۱۰ نقطه روی همون تصویر اضافه میشن
+  try{await loadPreviewRegions(j.overlay_url);
+   st.textContent='✅ ۱۰ نقطه بیشترین تغییر آماده انتخاب است';
+  }catch(e){}
  }catch(e){st.textContent='خطای ارتباط با سرور';}
 }
 async function go(){
  if(!store.before||!store.after){alert('هر دو عکس مرجع و دوم را مشخص کن');return;}
- document.getElementById('st').textContent='⏳ در حال تحلیل...';
+ if(!_selRegions.size){alert('⚠️ اول «نمایش همپوشانی» را بزن و حداقل یک نقطه انتخاب کن');return;}
+ document.getElementById('st').textContent='⏳ در حال تحلیل انتخاب‌شده‌ها...';
  const fd=new FormData();
  fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
  fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
  fd.append('px_per_mm',document.getElementById('ppm').value||0);
+ fd.append('selected',[..._selRegions].sort((a,b)=>a-b).join(','));
  try{
   const r=await api('/api/analyze',{method:'POST',body:fd});
   const j=await r.json();
   if(!j.ok){document.getElementById('st').textContent='خطا: '+j.error;return;}
   document.getElementById('st').textContent='';
   document.getElementById('out').style.display='block';
-  let s=`<p>مساحت نیمرخ: <b class="${cls(j.area_px.change_pct)}">${j.area_px.change_pct}٪</b></p>`;
-  s+=`<p>پهنا: <b class="${cls(j.bbox_px.width_change_pct)}">${j.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(j.bbox_px.height_change_pct)}">${j.bbox_px.height_change_pct}٪</b></p>`;
-  s+=`<p>حجم تخمینی: <b class="${cls(j.volume_proxy_px3.change_pct)}">${j.volume_proxy_px3.change_pct}٪</b></p>`;
+  let s=`<p>مساحت نقاط انتخابی: <b class="${cls(j.area_px.change_pct)}">${j.area_px.change_pct}٪</b> (${j.area_px.before} ← ${j.area_px.after} px²)</p>`;
+  s+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(j.volume_proxy_px3.change_pct)}">${j.volume_proxy_px3.change_pct}٪</b></p>`;
   if(j.scale)s+=`<p>مساحت: ${j.scale.area_mm2.before} ← ${j.scale.area_mm2.after} mm²<br>حجم تخمینی: ${j.scale.volume_proxy_mm3.before} ← ${j.scale.volume_proxy_mm3.after} mm³</p>`;
   document.getElementById('sum').innerHTML=s;
-  document.getElementById('tb').innerHTML=j.directions.map(d=>`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`).join('');
-  document.getElementById('ov').src=j.overlay_url;
+  // جدول هر نقطه
+  document.getElementById('regSec').style.display='block';
+  document.getElementById('tbReg').innerHTML=(j.regions||[]).map(rg=>{
+   const g=rg.type==='growth';
+   const ap=rg.area_px;
+   return `<tr><td><b>${fa(rg.number)}</b></td>
+    <td style="color:${g?'#1a7f37':'#b42318'};font-weight:bold">${g?'📈 رشد (+)':'📉 کاهش (−)'}</td>
+    <td>${ap.before}</td><td>${ap.after}</td>
+    <td><b class="${cls(ap.change_pct)}">${ap.change_pct}٪</b></td>
+    <td>${rg.direction}</td></tr>`;}).join('');
+  // جدول جهت فقط برای تحلیل کلی (خالی برای محدود)
+  const hasDirs=(j.directions||[]).length>0;
+  document.getElementById('dirH').style.display=hasDirs?'block':'none';
+  document.getElementById('dirT').style.display=hasDirs?'block':'none';
+  document.getElementById('tb').innerHTML=hasDirs?j.directions.map(d=>`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`).join(''):'';
+  // تصویر نتیجه: انتخاب‌شده پررنگ، بقیه کم‌رنگ
+  const ovBase=new Image();ovBase.crossOrigin='anonymous';
+  await new Promise((res,rej)=>{ovBase.onload=res;ovBase.onerror=rej;ovBase.src=j.overlay_url;});
+  const ovUrl=drawNumbered(ovBase,_regions,_selRegions,true,'ov');
+  if(ovUrl)_regionOvDataUrl=ovUrl;
   document.getElementById('note').textContent=j.note_fa;
   _lastAnalysis=j;
   document.getElementById('reportActions').style.display='block';
-  // ریست region selector
-  const rs=document.getElementById('regionSelector');
-  if(rs)rs.style.display='none';
-  _regions=[];_selRegions.clear();
-  // نمایش خودکار نقاط با بیشترین تغییر روی همپوشانی
-  try{await selectRegions(true);}catch(e){}
   document.getElementById('out').scrollIntoView({behavior:'smooth'});
  }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
 }

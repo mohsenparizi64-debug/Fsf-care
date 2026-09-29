@@ -373,6 +373,7 @@ async def api_analyze(
     after: UploadFile = File(...),
     px_per_mm: float = Form(0),
     inset: float = Form(0.08),
+    selected: str = Form(""),
 ):
     require_perm(request, "analyze")
     uid = uuid.uuid4().hex[:8]
@@ -382,10 +383,14 @@ async def api_analyze(
         f.write(await before.read())
     with open(p2, "wb") as f:
         f.write(await after.read())
+    sel = [s.strip() for s in (selected or "").replace("،", ",").split(",") if s.strip()]
+    if not sel:
+        return JSONResponse({"ok": False, "error": "اول «نمایش همپوشانی» را بزن و حداقل یک نقطه انتخاب کن"}, status_code=400)
     try:
         res, overlay, _ = analyze(p1, p2,
                                   px_per_mm=px_per_mm or None,
-                                  inset=float(inset))
+                                  inset=float(inset),
+                                  selected=sel)
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     cv2.imwrite(os.path.join(UPLOAD_DIR, f"{uid}_overlay.jpg"), overlay)
@@ -461,6 +466,7 @@ async def api_report(
     before: UploadFile = File(...),
     after: UploadFile = File(...),
     px_per_mm: float = Form(0),
+    selected: str = Form(""),
 ):
     """گزارش تحلیلی PDF بین دو عکس."""
     require_perm(request, "report")
@@ -471,10 +477,14 @@ async def api_report(
         f.write(await before.read())
     with open(p2, "wb") as f:
         f.write(await after.read())
+    sel = [s.strip() for s in (selected or "").replace("،", ",").split(",") if s.strip()]
+    if not sel:
+        return JSONResponse({"ok": False, "error": "اول «نمایش همپوشانی» را بزن و حداقل یک نقطه انتخاب کن"}, status_code=400)
     try:
         res, overlay, _ = analyze(p1, p2,
                                   px_per_mm=px_per_mm or None,
-                                  inset=0.08)
+                                  inset=0.08,
+                                  selected=sel)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     ov_path = os.path.join(UPLOAD_DIR, f"{uid}_overlay.jpg")

@@ -40,6 +40,15 @@ def load_gray(path, max_side=1200):
     return img
 
 
+def _norm_color(img, max_side=1200):
+    """نرمال‌سازی عکس رنگی به فضای مختصات overlay تحلیل (max_side=1200)."""
+    s = min(1.0, max_side / max(img.shape[:2]))
+    if s < 1.0:
+        img = cv2.resize(img, (int(img.shape[1] * s), int(img.shape[0] * s)),
+                         interpolation=cv2.INTER_AREA)
+    return img
+
+
 def align_ecc(im1, im2):
     """Align im2 onto im1 with affine ECC. Returns warped im2 (same size as im1)."""
     h, w = im1.shape
@@ -140,27 +149,17 @@ def volume_proxy_solid_of_revolution(mask):
     return vol
 
 
-def make_overlay(baseline_path, followup_path, inset=0.08):
-    """Overlay مبتنی بر مقایسه رنگی در فضای Lab — دقیق از mask comparison.
+def make_overlay_from_arrays(im1, im2):
+    """هسته مشترک overlay از آرایه‌های هم‌اندازه (هم‌راستا + Lab + Otsu).
 
-    مراحل:
-    1. خواندن هر دو تصویر رنگی
-    2. Align با ECC (روی grayscale)
-    3. مقایسه پیکسلی در Lab color space
-    4. Gaussian blur + Otsu threshold
-    5. تشخیص جهت: رشد (روشنتر) = قرمز، کاهش (تیرهتر) = آبی
+    ورودی‌ها باید هم‌اندازه باشند. برمی‌گرداند:
+    (vis, regions_full) که regions_full در مختصات همان ابعاد است.
     """
-    im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
-    im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
-    if im1 is None or im2 is None:
-        raise ValueError("cannot read images")
-    h, w = im1.shape[:2]
-    if im2.shape[:2] != (h, w):
-        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
 
     # ── 1) Align با ORB + Homography ──
     g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
+    h, w = im1.shape[:2]
     im2_aligned, valid_mask, H = _align_homography(im2, g1, g2, w, h)
 
     # ── 2) مقایسه رنگی در Lab (فقط کانال‌های a,b) ──
@@ -203,6 +202,32 @@ def make_overlay(baseline_path, followup_path, inset=0.08):
     contours, _ = cv2.findContours(all_changed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cv2.drawContours(vis, contours, -1, (0, 255, 255), 2)
 
+    return vis, growth, shrink, int(growth.sum()), int(shrink.sum())
+
+
+def _read_norm_pair(baseline_path, followup_path, max_side=1200):
+    """خواندن دو عکس و نرمال‌سازی به یک فضای مختصات (max_side).
+
+    عکس دوم به ابعاد عکس اول resize می‌شود. برمی‌گرداند (im1, im2).
+    همه خروجی‌های نمایشی (overlay تحلیل، overlay پیشنمایش، مختصات
+    regions) در همین فضا هستند تا شماره‌ها دقیقاً روی ناحیه تغییر بیفتند.
+    """
+    im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
+    im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
+    if im1 is None or im2 is None:
+        raise ValueError("cannot read images")
+    im1 = _norm_color(im1, max_side)
+    im2 = _norm_color(im2, max_side)
+    h, w = im1.shape[:2]
+    if im2.shape[:2] != (h, w):
+        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
+    return im1, im2
+
+
+def make_overlay(baseline_path, followup_path, inset=0.08):
+    """پیشنمایش overlay (Lab + Otsu) در فضای مختصات نرمال‌شده تحلیل."""
+    im1, im2 = _read_norm_pair(baseline_path, followup_path)
+    vis, _, _, _, _ = make_overlay_from_arrays(im1, im2)
     return vis
 
 
@@ -257,48 +282,16 @@ def _align_homography(im2, g1, g2, w, h):
 def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
     """استخراج مناطق تغییر به صورت اجزای مجزا برای گزارش تفکیکی.
 
+    مختصات در همان فضای overlay تحلیل است (نرمال‌شده به max_side=1200)
+    تا شماره‌ها روی تصویر همپوشانی دقیق بنشینند.
+
     برمیگرداند: (regions, stats)
     regions: لیست دیکشنری با شماره، مساحت، مرکز، جهت، درصد
     stats: مساحت کل رشد/کاهش
     """
-    im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
-    im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
-    if im1 is None or im2 is None:
-        raise ValueError("cannot read images")
+    im1, im2 = _read_norm_pair(baseline_path, followup_path)
     h, w = im1.shape[:2]
-    if im2.shape[:2] != (h, w):
-        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
-
-    # ===== هم‌راستاسازی ORB + Homography (۱۱ برابر دقیق‌تر از ECC affine) =====
-    g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
-    g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
-    im2_aligned, valid_mask, H = _align_homography(im2, g1, g2, w, h)
-
-    # ===== مقایسه رنگی Lab فقط روی ناحیه معتبر =====
-    lab1 = cv2.cvtColor(im1, cv2.COLOR_BGR2Lab).astype(np.float32)
-    lab2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2Lab).astype(np.float32)
-    # فقط کانال‌های رنگی (a,b) — مقاوم به تغییرات روشنایی
-    color_diff = np.sqrt((lab1[:, :, 1] - lab2[:, :, 1]) ** 2
-                         + (lab1[:, :, 2] - lab2[:, :, 2]) ** 2)
-    color_diff = cv2.GaussianBlur(color_diff, (15, 15), 0)
-    color_diff = np.where(valid_mask > 0, color_diff, 0)
-    diff_norm = cv2.normalize(color_diff, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
-    _, change_mask = cv2.threshold(diff_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-
-    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-    change_mask = cv2.morphologyEx(change_mask, cv2.MORPH_CLOSE, kernel)
-    change_mask = cv2.morphologyEx(change_mask, cv2.MORPH_OPEN, kernel)
-
-    gray1 = g1.astype(np.float32)
-    gray2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2GRAY).astype(np.float32)
-    bright_diff = gray2 - gray1
-
-    changed = change_mask > 0
-    growth = changed & (bright_diff > 15)
-    shrink = changed & (bright_diff < -15)
-
-    total_growth_px = int(growth.sum())
-    total_shrink_px = int(shrink.sum())
+    _, growth, shrink, total_growth_px, total_shrink_px = make_overlay_from_arrays(im1, im2)
 
     regions = []
     # اجزای مجزا در ماسک رشد و کاهش
@@ -359,7 +352,138 @@ def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
     return regions, stats_out
 
 
-def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
+def _union_contours(mask):
+    """اجتماع همه کانتورهای ≥۵٪ بزرگ‌ترین قطعه — سوژه چندتکه از دست نره."""
+    m = (mask > 0).astype(np.uint8)
+    cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return None
+    cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+    big = max(cv2.contourArea(cnts[0]) * 0.05, 50)
+    keep = [c for c in cnts if cv2.contourArea(c) >= big]
+    out = np.zeros_like(m)
+    cv2.drawContours(out, keep, -1, 1, thickness=cv2.FILLED)
+    return out
+
+
+def volume_proxy_in_bbox(mask_full, bbox):
+    """حجم تخمینی محدود به bbox: جمع pi*(w/2)^2 روی سطرهای داخل ناحیه."""
+    x, y, w, h = [int(v) for v in bbox]
+    H, W = mask_full.shape[:2]
+    x0, x1 = max(0, x), min(W, x + w)
+    y0, y1 = max(0, y), min(H, y + h)
+    if x1 <= x0 or y1 <= y0:
+        return 0.0
+    vol = 0.0
+    for yy in range(y0, y1):
+        row = np.where(mask_full[yy, x0:x1] > 0)[0]
+        if row.size < 2:
+            continue
+        wd = float(row.max() - row.min())
+        vol += np.pi * (wd / 2.0) ** 2
+    return vol
+
+
+def _analyze_scoped(baseline_path, followup_path, px_per_mm, inset, selected):
+    """تحلیل محدود به نقاط انتخاب‌شده کاربر (شماره‌های extract_regions).
+
+    مساحت مرجع/دوم هر نقطه = پیکسل‌های سوژه (GrabCut) داخل bbox همان نقطه؛
+    ماسک دوم با H هم‌راستا می‌شود تا مقایسه در یک قاب باشد (مثل overlay).
+    """
+    try:
+        sel = sorted({int(s) for s in selected if str(s).strip()})
+    except Exception:
+        sel = []
+    if not sel:
+        raise ValueError("اول نقطه‌ای برای تحلیل انتخاب کن")
+    regions_all, _ = extract_regions(baseline_path, followup_path)
+    regions = [r for r in regions_all if r["number"] in sel]
+    if not regions:
+        raise ValueError("نقاط انتخاب‌شده معتبر نیست؛ دوباره «نمایش همپوشانی» را بزن")
+
+    im1, im2 = _read_norm_pair(baseline_path, followup_path)
+    h1, w1 = im1.shape[:2]
+    max_side = 1200
+    m1 = segment_grabcut_arr(im1, inset=inset, max_side=max_side + 1)
+    m2 = segment_grabcut_arr(im2, inset=inset, max_side=max_side + 1)
+    g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+    g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
+    _, _, H = _align_homography(im2, g1, g2, w1, h1)
+    m2w = cv2.warpPerspective(m2, H, (w1, h1), flags=cv2.INTER_NEAREST) if H is not None else m2
+    m1_full = _union_contours(m1)
+    m2_full = _union_contours(m2w)
+    if m1_full is None or m2_full is None:
+        raise ValueError("سوژه پیدا نشد؛ inset را تغییر بده یا عکس با پس‌زمینه خلوت‌تر بگیر")
+
+    def pct(a, b):
+        return (b - a) / a * 100 if a > 1e-9 else 0.0
+
+    out_regions = []
+    for r in regions:
+        bx, by, bw, bh = [int(v) for v in r["bbox"]]
+        x0, x1 = max(0, bx), min(w1, bx + bw)
+        y0, y1 = max(0, by), min(h1, by + bh)
+        a_before = float(m1_full[y0:y1, x0:x1].sum()) if x1 > x0 and y1 > y0 else 0.0
+        a_after = float(m2_full[y0:y1, x0:x1].sum()) if x1 > x0 and y1 > y0 else 0.0
+        v_before = volume_proxy_in_bbox(m1_full, r["bbox"])
+        v_after = volume_proxy_in_bbox(m2_full, r["bbox"])
+        entry = {
+            "number": r["number"], "type": r["type"], "sign": r["sign"],
+            "direction": r["direction"], "pct": r["pct"],
+            "cx": r["cx"], "cy": r["cy"], "bbox": r["bbox"],
+            "area_px": {"before": round(a_before, 1), "after": round(a_after, 1),
+                        "change_pct": round(pct(a_before, a_after), 2)},
+            "volume_proxy_px3": {"before": round(v_before, 1), "after": round(v_after, 1),
+                                 "change_pct": round(pct(v_before, v_after), 2)},
+        }
+        if px_per_mm and px_per_mm > 0:
+            entry["area_mm2"] = {"before": round(a_before / px_per_mm ** 2, 2),
+                                 "after": round(a_after / px_per_mm ** 2, 2)}
+            entry["volume_proxy_mm3"] = {"before": round(v_before / px_per_mm ** 3, 2),
+                                         "after": round(v_after / px_per_mm ** 3, 2)}
+        out_regions.append(entry)
+
+    tot_ab = sum(e["area_px"]["before"] for e in out_regions)
+    tot_aa = sum(e["area_px"]["after"] for e in out_regions)
+    tot_vb = sum(e["volume_proxy_px3"]["before"] for e in out_regions)
+    tot_va = sum(e["volume_proxy_px3"]["after"] for e in out_regions)
+    res = {
+        "scoped": True,
+        "selected": [e["number"] for e in out_regions],
+        "regions": out_regions,
+        "area_px": {"before": round(tot_ab, 1), "after": round(tot_aa, 1),
+                    "change_pct": round(pct(tot_ab, tot_aa), 2)},
+        "volume_proxy_px3": {"before": round(tot_vb, 1), "after": round(tot_va, 1),
+                             "change_pct": round(pct(tot_vb, tot_va), 2)},
+        "directions": [],
+        "note_fa": ("تحلیل محدود به نقاط انتخاب‌شده است؛ مساحت و حجم هر نقطه فقط "
+                    "داخل همان ناحیه سنجیده شده و بقیه تصویر نادیده گرفته شده است."),
+    }
+    if px_per_mm and px_per_mm > 0:
+        res["scale"] = {"px_per_mm": px_per_mm,
+                        "area_mm2": {"before": round(tot_ab / px_per_mm ** 2, 2),
+                                     "after": round(tot_aa / px_per_mm ** 2, 2)},
+                        "volume_proxy_mm3": {"before": round(tot_vb / px_per_mm ** 3, 2),
+                                             "after": round(tot_va / px_per_mm ** 3, 2)}}
+    # overlay پایه (مثل تحلیل کلی) — شماره‌ها در فرانت‌اند رسم می‌شن
+    m1_ov = cv2.resize(m1, (w1, h1), interpolation=cv2.INTER_NEAREST)
+    m2_ov = cv2.resize(m2, (w1, h1), interpolation=cv2.INTER_NEAREST)
+    if H is not None:
+        m2_ov = cv2.warpPerspective(m2_ov, H, (w1, h1), flags=cv2.INTER_NEAREST)
+    c1_ov = largest_contour(m1_ov)
+    c2_ov = largest_contour(m2_ov)
+    overlay = draw_overlay(g1, m1_ov, m2_ov, c1_ov, c2_ov)
+    return res, overlay, (m1, m2)
+
+
+def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08, selected=None):
+    """تحلیل کامل یا محدود به نقاط انتخابی (selected = شماره‌های extract_regions).
+
+    selected=None → رفتار قبلی (کل سوژه). در غیر این صورت فقط نقاط انتخابی
+    تحلیل می‌شن و بدون انتخاب معتبر خطا میده.
+    """
+    if selected is not None:
+        return _analyze_scoped(baseline_path, followup_path, px_per_mm, inset, selected)
     im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
     im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
     if im1 is None or im2 is None:
@@ -395,20 +519,7 @@ def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
     m1 = segment_grabcut_arr(im1, inset=inset, max_side=max_side + 1)
     m2 = segment_grabcut_arr(im2, inset=inset, max_side=max_side + 1)
 
-    # حذف قطعات کوچک نویزی — همه‌ی کانتورها با مساحت ≥ ۵٪ بزرگ‌ترین را
-    # نگه میداریم تا سوژه‌ای که به دو قسمت تقسیم شده از دست نره
-    def _union_contours(mask):
-        m = (mask > 0).astype(np.uint8)
-        cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        if not cnts:
-            return None
-        cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
-        big = max(cv2.contourArea(cnts[0]) * 0.05, 50)
-        keep = [c for c in cnts if cv2.contourArea(c) >= big]
-        out = np.zeros_like(m)
-        cv2.drawContours(out, keep, -1, 1, thickness=cv2.FILLED)
-        return out
-
+    # حذف قطعات کوچک نویزی — _union_contours مشترک (اجتماع ≥۵٪ بزرگ‌ترین)
     m1_full = _union_contours(m1)
     m2_full = _union_contours(m2)
     if m1_full is None or m2_full is None:
