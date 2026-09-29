@@ -516,8 +516,7 @@ let camCapsCache=null, curScene='normal', torchOn=false, camBusy=false;
 const store={before:null,after:null};
 let pick={ref:null,other:null};
 
-function currentProject(){const s=document.getElementById('projSel');return s?(s.value||'').trim():'';}
-function onProjectChange(){const v=currentProject();document.getElementById('projmsg').textContent=v?'پروژه فعال: '+v:'';}
+// NOTE: currentProject/onProjectChange دوباره در بخش پروژه‌ها تعریف شده‌اند
 function newProjectToggle(){const box=document.getElementById('newProjBox');box.style.display=(box.style.display==='none')?'block':'none';if(box.style.display==='block')document.getElementById('newProj').focus();}
 
 async function openCam(){
@@ -886,7 +885,18 @@ window.addEventListener('orientationchange',()=>setTimeout(layoutBox,300));
 
 /* ===== پروژه‌ها ===== */
 function currentProject(){const s=document.getElementById('projSel');return s?(s.value||'').trim():'';}
-function onProjectChange(){const v=currentProject();document.getElementById('projmsg').textContent=v?'پروژه فعال: '+v:'';}
+function onProjectChange(){
+ const v=currentProject();
+ document.getElementById('projmsg').textContent=v?'پروژه فعال: '+v:'';
+ syncProjectSelects(v);
+}
+// سینک دوطرفه projSel (تحلیل/دوربین) با projSelG (گالری) و projSelC
+function syncProjectSelects(v){
+ const g=document.getElementById('projSelG');
+ if(g&&g.value!==v){g.value=v;try{loadGallery();}catch(e){}}
+ const c=document.getElementById('projSelC');
+ if(c&&c.value!==v)c.value=v;
+}
 function newProjectToggle(){const box=document.getElementById('newProjBox');box.style.display=(box.style.display==='none')?'block':'none';if(box.style.display==='block')document.getElementById('newProj').focus();}
 async function refreshProjectLists(){
  try{
@@ -945,6 +955,8 @@ window.addEventListener('resize',drawGrid);
 /* ===== گالری ===== */
 async function loadGallery(){
  const g=document.getElementById('projSelG').value;
+ // سینک پروژه گالری با تحلیل (باگ: گالری ۴ عکس ولی تحلیل ۲ عکس پروژه دیگه)
+ if(g&&currentProject()!==g){const ps=document.getElementById('projSel');if(ps)ps.value=g;}
  const box=document.getElementById('gallery');
  pick={ref:null,other:null};updateReportBar();
  if(!g){box.innerHTML='<p class="muted">یک پروژه انتخاب کن.</p>';return;}
@@ -1276,7 +1288,7 @@ async function makeReport(fmt){
 /* ===== تفکیکی نقاط تغییر ===== */
 let _regions=[], _selRegions=new Set(), _regionOvDataUrl='';
 
-async function selectRegions(){
+async function selectRegions(auto){
  if(!_lastAnalysis){alert('ابتدا تحلیل را انجام بده');return;}
  const st=document.getElementById('regionMsg');
  const box=document.getElementById('regionSelector');
@@ -1332,6 +1344,9 @@ async function selectRegions(){
   _regionOvDataUrl=cv.toDataURL('image/jpeg',0.92);
   document.getElementById('regionOv').src=_regionOvDataUrl;
   document.getElementById('regionMap').innerHTML=mapHtml;
+  // overlay اصلی تحلیل رو هم شماره‌گذاری کن (باگ: نقاط روی عکس اصلی نشون داده نمیشدن)
+  const ovMain=document.getElementById('ov');
+  if(ovMain)ovMain.src=_regionOvDataUrl;
   // لیست چکباکس با علامت
   rList.innerHTML=_regions.map(rg=>
    `<label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px 8px;cursor:pointer">
@@ -1410,6 +1425,8 @@ async function go(){
   const rs=document.getElementById('regionSelector');
   if(rs)rs.style.display='none';
   _regions=[];_selRegions.clear();
+  // نمایش خودکار نقاط با بیشترین تغییر روی همپوشانی
+  try{await selectRegions(true);}catch(e){}
   document.getElementById('out').scrollIntoView({behavior:'smooth'});
  }catch(e){document.getElementById('st').textContent='خطای ارتباط با سرور';}
 }
