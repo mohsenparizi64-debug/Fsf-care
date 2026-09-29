@@ -78,6 +78,10 @@ def _segment_grabcut_arr(img, inset=0.08, max_side=1200, iters=4):
     rect = (x0, y0, w - 2 * x0, h - 2 * y0)
     bgd = np.zeros((1, 65), np.float64)
     fgd = np.zeros((1, 65), np.float64)
+    # باگ: GrabCut به‌طور پیش‌فرض غیرقطعی است (GMM random init) و تا ۹٪
+    # در مساحت سوژه نوسان میکند → اعداد تحلیل هر بار متفاوت میشد.
+    # seed ثابت → نتایج قابل بازتولید
+    cv2.setRNGSeed(42)
     cv2.grabCut(img, mask, rect, bgd, fgd, iters, cv2.GC_INIT_WITH_RECT)
     bin_mask = np.where((mask == 2) | (mask == 0), 0, 1).astype(np.uint8) * 255
     # keep largest connected component
@@ -360,28 +364,65 @@ def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
     im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
     if im1 is None or im2 is None:
         raise ValueError("cannot read images")
-    h, w = im1.shape[:2]
-    if im2.shape[:2] != (h, w):
-        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
+
+    # نرمال‌سازی هر دو عکس به max_side یکسان — GrabCut و metrics روی این سایز
+    # کار میکنن تا ماسک و gray همیشه هم‌اندازه بمونن (باگ سایز ماسک)
+    max_side = 1200
+
+    def _norm(img):
+        s = min(1.0, max_side / max(img.shape[:2]))
+        if s < 1.0:
+            img = cv2.resize(img, (int(img.shape[1] * s), int(img.shape[0] * s)),
+                             interpolation=cv2.INTER_AREA)
+        return img
+
+    im1, im2 = _norm(im1), _norm(im2)
+    h1, w1 = im1.shape[:2]
+    h2, w2 = im2.shape[:2]
 
     # هم‌راستاسازی ORB + Homography (۱۱ برابر دقیق‌تر از ECC affine)
     g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
-    im2_aligned, valid_mask, H = _align_homography(im2, g1, g2, w, h)
+    if (h2, w2) != (h1, w1):
+        im2_r = cv2.resize(im2, (w1, h1), interpolation=cv2.INTER_AREA)
+        g2_r = cv2.cvtColor(im2_r, cv2.COLOR_BGR2GRAY)
+    else:
+        im2_r, g2_r = im2, g2
+    im2_aligned, valid_mask, H = _align_homography(im2_r, g1, g2_r, w1, h1)
 
-    # سگمنت‌گذاری روی تصویر مرجع و تصویر هم‌راستا شده
-    m1 = segment_grabcut_arr(im1, inset=inset)
-    m2 = segment_grabcut_arr(im2_aligned, inset=inset)
+    # سگمنت‌گذاری مستقل روی هر عکس در مختصات خودش — resize به یک سایز
+    # باعث کشیدگی و اندازه‌گیری غلط میشه. هر عکس با aspect اصلی خودش.
+    m1 = segment_grabcut_arr(im1, inset=inset, max_side=max_side + 1)
+    m2 = segment_grabcut_arr(im2, inset=inset, max_side=max_side + 1)
+
+    # حذف قطعات کوچک نویزی — همه‌ی کانتورها با مساحت ≥ ۵٪ بزرگ‌ترین را
+    # نگه میداریم تا سوژه‌ای که به دو قسمت تقسیم شده از دست نره
+    def _union_contours(mask):
+        m = (mask > 0).astype(np.uint8)
+        cnts, _ = cv2.findContours(m, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if not cnts:
+            return None
+        cnts = sorted(cnts, key=cv2.contourArea, reverse=True)
+        big = max(cv2.contourArea(cnts[0]) * 0.05, 50)
+        keep = [c for c in cnts if cv2.contourArea(c) >= big]
+        out = np.zeros_like(m)
+        cv2.drawContours(out, keep, -1, 1, thickness=cv2.FILLED)
+        return out
+
+    m1_full = _union_contours(m1)
+    m2_full = _union_contours(m2)
+    if m1_full is None or m2_full is None:
+        raise ValueError("سوژه پیدا نشد؛ inset را تغییر بده یا عکس با پس‌زمینه خلوت‌تر بگیر")
 
     c1 = largest_contour(m1)
     c2 = largest_contour(m2)
     if c1 is None or c2 is None:
         raise ValueError("سوژه پیدا نشد؛ inset را تغییر بده یا عکس با پس‌زمینه خلوت‌تر بگیر")
 
-    a1 = float(cv2.contourArea(c1))
-    a2 = float(cv2.contourArea(c2))
-    x1, y1, w1, h1 = cv2.boundingRect(c1)
-    x2, y2, w2, h2 = cv2.boundingRect(c2)
+    a1 = float(m1_full.sum())
+    a2 = float(m2_full.sum())
+    bx1, by1, bw1, bh1 = cv2.boundingRect(c1)
+    bx2, by2, bw2, bh2 = cv2.boundingRect(c2)
     M1 = cv2.moments(c1)
     M2 = cv2.moments(c2)
     cx1, cy1 = M1["m10"] / M1["m00"], M1["m01"] / M1["m00"]
@@ -397,8 +438,8 @@ def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
                      "before_px": round(b, 1), "after_px": round(float(r2[i]), 1),
                      "change_pct": round(pct, 2)})
 
-    v1 = volume_proxy_solid_of_revolution(m1)
-    v2 = volume_proxy_solid_of_revolution(m2)
+    v1 = volume_proxy_solid_of_revolution(m1_full)
+    v2 = volume_proxy_solid_of_revolution(m2_full)
 
     def pct(a, b):
         return (b - a) / a * 100 if a > 1e-9 else 0.0
@@ -406,9 +447,9 @@ def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
     res = {
         "area_px": {"before": round(a1, 1), "after": round(a2, 1),
                     "change_pct": round(pct(a1, a2), 2)},
-        "bbox_px": {"before_wh": [w1, h1], "after_wh": [w2, h2],
-                    "width_change_pct": round(pct(w1, w2), 2),
-                    "height_change_pct": round(pct(h1, h2), 2)},
+        "bbox_px": {"before_wh": [bw1, bh1], "after_wh": [bw2, bh2],
+                    "width_change_pct": round(pct(bw1, bw2), 2),
+                    "height_change_pct": round(pct(bh1, bh2), 2)},
         "centroid_shift_px": {"dx": round(cx2 - cx1, 1), "dy": round(cy2 - cy1, 1)},
         "directions": dirs,
         "volume_proxy_px3": {"before": round(v1, 1), "after": round(v2, 1),
@@ -425,7 +466,15 @@ def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
                                              "after": round(v2 / px_per_mm ** 3, 2)}}
         res["centroid_shift_mm"] = {"dx": round((cx2 - cx1) / px_per_mm, 2),
                                     "dy": round((cy2 - cy1) / px_per_mm, 2)}
-    overlay = draw_overlay(g1, m1, m2, c1, c2)
+    # overlay: ماسک‌ها رو هم‌اندازه‌ی im1 میکنیم و m2 رو با H هم‌راستا
+    g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+    m1_ov = cv2.resize(m1, (w1, h1), interpolation=cv2.INTER_NEAREST)
+    m2_ov = cv2.resize(m2, (w1, h1), interpolation=cv2.INTER_NEAREST)
+    if H is not None:
+        m2_ov = cv2.warpPerspective(m2_ov, H, (w1, h1), flags=cv2.INTER_NEAREST)
+    c1_ov = largest_contour(m1_ov)
+    c2_ov = largest_contour(m2_ov)
+    overlay = draw_overlay(g1, m1_ov, m2_ov, c1_ov, c2_ov)
     return res, overlay, (m1, m2)
 
 
