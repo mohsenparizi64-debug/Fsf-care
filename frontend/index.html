@@ -894,7 +894,6 @@ function syncProjectSelects(v){
  const c=document.getElementById('projSelC');
  if(c&&c.value!==v)c.value=v;
 }
-function newProjectToggle(){const box=document.getElementById('newProjBox');box.style.display=(box.style.display==='none')?'block':'none';if(box.style.display==='block')document.getElementById('newProj').focus();}
 async function refreshProjectLists(){
  try{
   const r=await api('/api/projects');const j=await r.json();
