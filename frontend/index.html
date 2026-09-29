@@ -294,6 +294,7 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
  <p style="font-size:13px;font-weight:bold;margin:0 0 8px">📄 تهیه گزارش</p>
  <div class="row">
   <button class="primary" onclick="makeReport('html')">دانلود HTML</button>
+  <button class="primary" onclick="makeReport('pdf')">دانلود PDF</button>
   <button class="secondary" id="selRegionsBtn" onclick="selectRegions()">🎯 انتخاب نقاط تغییر</button>
  </div>
 </div>
@@ -1244,8 +1245,32 @@ async function makeReport(fmt){
   downloadBlob(blob,'گزارش_تحلیل.html');
   return;
  }
- // PDF — فعلا غیرفعال
- alert('گزارش PDF فعلا در دست توسعه است. از گزارش HTML استفاده کن.');
+ // PDF
+ try{
+  const st=document.getElementById('st');
+  if(st)st.textContent='⏳ در حال ساخت PDF...';
+  const fd=new FormData();
+  fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
+  fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
+  fd.append('px_per_mm',document.getElementById('ppm').value||0);
+  const r=await api('/api/report',{method:'POST',body:fd});
+  if(!r.ok){
+   const j=await r.json().catch(()=>({}));
+   if(st)st.textContent='خطا: '+(j.error||j.detail||r.status);
+   alert('خطا در ساخت PDF: '+(j.error||j.detail||r.status));
+   return;
+  }
+  const blob=await r.blob();
+  if(blob.size<2000){
+   if(st)st.textContent='فایل PDF نامعتبر است';
+   alert('فایل PDF نامعتبر است');
+   return;
+  }
+  downloadBlob(blob,'گزارش_تحلیل.pdf');
+  if(st)st.textContent='✅ PDF آماده شد';
+ }catch(e){
+  alert('خطای ارتباط با سرور برای PDF');
+ }
 }
 
 /* ===== تفکیکی نقاط تغییر ===== */

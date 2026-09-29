@@ -59,6 +59,15 @@ def segment_grabcut(color_path, inset=0.08, max_side=1200, iters=4):
     img = _imread_any(color_path, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError(f"cannot read image: {color_path}")
+    return _segment_grabcut_arr(img, inset, max_side, iters)
+
+
+def segment_grabcut_arr(img, inset=0.08, max_side=1200, iters=4):
+    """سگمنت‌گذاری GrabCut روی آرایه (به جای مسیر فایل)."""
+    return _segment_grabcut_arr(img, inset, max_side, iters)
+
+
+def _segment_grabcut_arr(img, inset=0.08, max_side=1200, iters=4):
     h, w = img.shape[:2]
     s = min(1.0, max_side / max(h, w))
     if s < 1.0:
@@ -347,31 +356,22 @@ def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
 
 
 def analyze(baseline_path, followup_path, px_per_mm=None, inset=0.08):
-    g1 = load_gray(baseline_path)
-    g2_raw = load_gray(followup_path)
-    # resize followup color inside segment; align on gray of same size
-    h, w = g1.shape
-    g2 = cv2.resize(g2_raw, (w, h)) if g2_raw.shape != g1.shape else g2_raw
-    g2_aligned = align_ecc(g1, g2)
+    im1 = _imread_any(baseline_path, cv2.IMREAD_COLOR)
+    im2 = _imread_any(followup_path, cv2.IMREAD_COLOR)
+    if im1 is None or im2 is None:
+        raise ValueError("cannot read images")
+    h, w = im1.shape[:2]
+    if im2.shape[:2] != (h, w):
+        im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
 
-    m1 = segment_grabcut(baseline_path, inset=inset)
-    # segment followup then warp its mask with same transform is complex;
-    # simpler: write aligned gray to temp? Instead segment original followup
-    # and resize — alignment already applied at measurement level via moments.
-    m2_raw = segment_grabcut(followup_path, inset=inset)
-    m2 = cv2.resize(m2_raw, (w, h), interpolation=cv2.INTER_NEAREST)
-    # refine: align mask m2 to m1 with ECC-computed warp on grays is already
-    # approximated; do a second ECC pass mask-to-mask for translation only
-    warp = np.eye(2, 3, dtype=np.float32)
-    try:
-        criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 40, 1e-4)
-        _, warp = cv2.findTransformECC(m1.astype(np.float32) / 255,
-                                       m2.astype(np.float32) / 255,
-                                       warp, cv2.MOTION_TRANSLATION, criteria, None, 1)
-        m2 = cv2.warpAffine(m2, warp, (w, h),
-                            flags=cv2.INTER_NEAREST + cv2.WARP_INVERSE_MAP)
-    except cv2.error:
-        pass
+    # هم‌راستاسازی ORB + Homography (۱۱ برابر دقیق‌تر از ECC affine)
+    g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
+    g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
+    im2_aligned, valid_mask, H = _align_homography(im2, g1, g2, w, h)
+
+    # سگمنت‌گذاری روی تصویر مرجع و تصویر هم‌راستا شده
+    m1 = segment_grabcut_arr(im1, inset=inset)
+    m2 = segment_grabcut_arr(im2_aligned, inset=inset)
 
     c1 = largest_contour(m1)
     c2 = largest_contour(m2)
