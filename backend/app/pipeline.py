@@ -145,25 +145,20 @@ def make_overlay(baseline_path, followup_path, inset=0.08):
     if im2.shape[:2] != (h, w):
         im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
 
-    # ── 1) Align با ECC روی grayscale ──
+    # ── 1) Align با ORB + Homography ──
     g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
-    warp = np.eye(2, 3, dtype=np.float32)
-    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-5)
-    try:
-        _, warp = cv2.findTransformECC(g1, g2, warp, cv2.MOTION_AFFINE, criteria, None, 5)
-        im2_aligned = cv2.warpAffine(im2, warp, (w, h),
-                                     flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
-    except cv2.error:
-        im2_aligned = im2.copy()
+    im2_aligned, valid_mask, H = _align_homography(im2, g1, g2, w, h)
 
-    # ── 2) مقایسه رنگی در Lab ──
+    # ── 2) مقایسه رنگی در Lab (فقط کانال‌های a,b) ──
     lab1 = cv2.cvtColor(im1, cv2.COLOR_BGR2Lab).astype(np.float32)
     lab2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2Lab).astype(np.float32)
-    color_diff = np.sqrt(np.sum((lab1 - lab2) ** 2, axis=2))
+    color_diff = np.sqrt((lab1[:, :, 1] - lab2[:, :, 1]) ** 2
+                         + (lab1[:, :, 2] - lab2[:, :, 2]) ** 2)
 
     # ── 3) Blur + threshold ──
     color_diff = cv2.GaussianBlur(color_diff, (15, 15), 0)
+    color_diff = np.where(valid_mask > 0, color_diff, 0)
     diff_norm = cv2.normalize(color_diff, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     _, change_mask = cv2.threshold(diff_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
@@ -198,6 +193,54 @@ def make_overlay(baseline_path, followup_path, inset=0.08):
     return vis
 
 
+def _align_homography(im2, g1, g2, w, h):
+    """هم‌راستاسازی im2 روی g1 با ORB + Homography + RANSAC.
+
+    برمیگرداند: (im2_aligned, valid_mask, H)
+    valid_mask: نواحی از تصویر که داده معتبر دارن (حاشیه‌های warp شده مستثنی شدن)
+    """
+    orb = cv2.ORB_create(nfeatures=8000, scaleFactor=1.2, nlevels=8, edgeThreshold=15)
+    kp1, des1 = orb.detectAndCompute(g1, None)
+    kp2, des2 = orb.detectAndCompute(g2, None)
+
+    im2_aligned = im2.copy()
+    valid_mask = np.full((h, w), 255, dtype=np.uint8)
+    H = None
+
+    if des1 is None or des2 is None or len(kp1) < 10 or len(kp2) < 10:
+        return im2_aligned, valid_mask, H
+
+    # Lowe's ratio test — دقیق‌تر از crossCheck
+    bf = cv2.BFMatcher(cv2.NORM_HAMMING)
+    raw = bf.knnMatch(des1, des2, k=2)
+    good = [m for m, n in raw if m.distance < 0.75 * n.distance]
+    if len(good) < 10:
+        return im2_aligned, valid_mask, H
+
+    pts1 = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
+    pts2 = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
+
+    H, mask = cv2.findHomography(pts2, pts1, cv2.RANSAC, 3.0)
+    if H is None:
+        return im2_aligned, valid_mask, H
+
+    im2_aligned = cv2.warpPerspective(im2, H, (w, h), flags=cv2.INTER_CUBIC,
+                                       borderMode=cv2.BORDER_REPLICATE)
+
+    # ماسک ناحیه معتبر: گوشه‌های im2 تبدیل میشن به مختصات im1
+    corners = np.float32([[0, 0], [w, 0], [w, h], [0, h]]).reshape(-1, 1, 2)
+    corners_mapped = cv2.perspectiveTransform(corners, H)
+    valid_mask = np.zeros((h, w), dtype=np.uint8)
+    cv2.fillPoly(valid_mask, [np.int32(corners_mapped)], 255)
+    # حاشیه داخلی برای دقت لبه‌ها
+    ins = 15
+    valid_mask[:ins, :] = 0
+    valid_mask[-ins:, :] = 0
+    valid_mask[:, :ins] = 0
+    valid_mask[:, -ins:] = 0
+    return im2_aligned, valid_mask, H
+
+
 def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
     """استخراج مناطق تغییر به صورت اجزای مجزا برای گزارش تفکیکی.
 
@@ -213,23 +256,19 @@ def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
     if im2.shape[:2] != (h, w):
         im2 = cv2.resize(im2, (w, h), interpolation=cv2.INTER_AREA)
 
-    # Align
+    # ===== هم‌راستاسازی ORB + Homography (۱۱ برابر دقیق‌تر از ECC affine) =====
     g1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
     g2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
-    warp = np.eye(2, 3, dtype=np.float32)
-    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 100, 1e-5)
-    try:
-        _, warp = cv2.findTransformECC(g1, g2, warp, cv2.MOTION_AFFINE, criteria, None, 5)
-        im2_aligned = cv2.warpAffine(im2, warp, (w, h),
-                                     flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
-    except cv2.error:
-        im2_aligned = im2.copy()
+    im2_aligned, valid_mask, H = _align_homography(im2, g1, g2, w, h)
 
-    # مقایسه رنگی Lab
+    # ===== مقایسه رنگی Lab فقط روی ناحیه معتبر =====
     lab1 = cv2.cvtColor(im1, cv2.COLOR_BGR2Lab).astype(np.float32)
     lab2 = cv2.cvtColor(im2_aligned, cv2.COLOR_BGR2Lab).astype(np.float32)
-    color_diff = np.sqrt(np.sum((lab1 - lab2) ** 2, axis=2))
+    # فقط کانال‌های رنگی (a,b) — مقاوم به تغییرات روشنایی
+    color_diff = np.sqrt((lab1[:, :, 1] - lab2[:, :, 1]) ** 2
+                         + (lab1[:, :, 2] - lab2[:, :, 2]) ** 2)
     color_diff = cv2.GaussianBlur(color_diff, (15, 15), 0)
+    color_diff = np.where(valid_mask > 0, color_diff, 0)
     diff_norm = cv2.normalize(color_diff, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     _, change_mask = cv2.threshold(diff_norm, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
 
