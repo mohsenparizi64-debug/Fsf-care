@@ -1200,7 +1200,8 @@ async function makeReport(fmt){
   // ── تفکیکی نقاط انتخابی ──
   if(_selRegions.size){
    const sel=_regions.filter(r=>_selRegions.has(r.number));
-   h+=`<div class="card"><h3>🎯 تفکیکی نقاط تغییر (${fa(sel.length)} نقطه)</h3>`;
+   h+=`<div class="card"><h3>🎯 تفکیکی نقاط تغییر (${fa(sel.length)} نقطه)</h3>
+   <p style="color:#666;font-size:13px">این نقاط، ${fa(sel.length)} نقطه با بزرگترین تغییرات نسبت به عکس مرجع هستند.</p>`;
    h+=`<table><tr><th>#</th><th>نوع تغییر</th><th>مساحت (px)</th><th>مساحت (mm²)</th><th>جهت</th><th>درصد از کل</th><th>موقعیت مرکز</th></tr>`;
    for(const rg of sel){
     const isGrowth=rg.type==='growth';
@@ -1313,7 +1314,7 @@ async function selectRegions(){
     <span style="color:${rg.type==='growth'?'#1a7f37':'#b42318'};font-weight:bold">${rg.sign}</span>
     <span>نقطه ${fa(rg.number)}</span>
    </label>`).join('');
-  st.textContent=fa(_regions.length)+' نقطه پیدا شد — انتخاب کن:';
+  st.textContent=fa(_regions.length)+' نقطه با بزرگترین تغییرات — انتخاب کن:';
  }catch(e){st.textContent='خطای ارتباط با سرور';}
  box.scrollIntoView({behavior:'smooth'});
 }

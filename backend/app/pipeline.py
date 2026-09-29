@@ -294,6 +294,8 @@ def extract_regions(baseline_path, followup_path, min_area=200, inset=0.08):
 
     # مرتبسازی نزولی بر اساس مساحت
     regions.sort(key=lambda r: r["area_px"], reverse=True)
+    # فقط ۱۰ نقطه با بزرگترین تغییرات
+    regions = regions[:10]
     for i, r in enumerate(regions, 1):
         r["number"] = i
 
