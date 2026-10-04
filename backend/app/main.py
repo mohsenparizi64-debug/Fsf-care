@@ -94,6 +94,26 @@ def health():
     return {"ok": True, "service": "fsfmonitor", "version": "0.8.0", "jdatetime": JDTIME}
 
 
+# ---------- لوگو و فاوآیکون ----------
+_LOGO_PATH = os.path.join(FRONTEND_DIR, "logo.jpg")
+
+
+@app.get("/logo.jpg")
+def logo():
+    from fastapi.responses import FileResponse
+    if os.path.exists(_LOGO_PATH):
+        return FileResponse(_LOGO_PATH, media_type="image/jpeg")
+    raise HTTPException(404, "logo not found")
+
+
+@app.get("/favicon.ico")
+def favicon():
+    from fastapi.responses import FileResponse
+    if os.path.exists(_LOGO_PATH):
+        return FileResponse(_LOGO_PATH, media_type="image/jpeg")
+    raise HTTPException(404, "logo not found")
+
+
 # ---------- احراز هویت ----------
 
 @app.post("/api/login")

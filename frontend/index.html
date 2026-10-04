@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1a7f37">
+<link rel="icon" type="image/jpeg" href="/logo.jpg">
 <title>fsfmonitor — سنجش تغییر</title>
 <style>
 *{box-sizing:border-box}
@@ -186,7 +187,7 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <!-- ===== صفحه لاگین ===== -->
 <div id="loginPage" style="display:none;min-height:100vh;align-items:center;justify-content:center;background:#1a7f37">
  <div style="background:#fff;border-radius:16px;padding:24px;width:min(380px,92vw)">
-  <h2 style="text-align:center;color:#1a7f37;margin:0 0 6px">📷 fsfmonitor</h2>
+  <h2 style="text-align:center;color:#1a7f37;margin:0 0 6px"><img src="/logo.jpg" alt="FSFmonitor" style="width:120px;height:120px;object-fit:cover;border-radius:50%;display:block;margin:0 auto 8px">fsfmonitor</h2>
   <p class="muted" style="text-align:center">برای ورود نام کاربری و رمز عبور را وارد کنید</p>
   <label class="sl">نام کاربری:</label><input type="text" id="liUser" autocomplete="username">
   <label class="sl">رمز عبور:</label><input type="password" id="liPass" autocomplete="current-password">
@@ -197,7 +198,7 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 </div>
 
 <div id="app" style="display:none">
-<header><h1>📷 fsfmonitor</h1><span class="who" id="whoBox"></span></header><nav>
+<header><img src="/logo.jpg" alt="FSFmonitor" style="width:40px;height:40px;object-fit:cover;border-radius:50%;flex:none"><h1>fsfmonitor</h1><span class="who" id="whoBox"></span></header><nav>
 <button id="t1" class="on" onclick="tab(1)">📸 دوربین</button>
 <button id="t2" onclick="tab(2)">🖼 گالری</button>
 <button id="t3" onclick="tab(3)">🔍 تحلیل</button>
@@ -1161,8 +1162,22 @@ async function makeReport(fmt){
  if(fmt==='html'){
   const showGrid=prompt('تراکم گرید (عدد بین ۲ تا ۲۰):','۶');
   const gn=parseInt(showGrid)||6;
-  const srcBefore=store.before||'';
-  const srcAfter=store.after||'';
+  // عکس‌ها را به dataURL تبدیل می‌کنیم تا در فایل دانلودی زنده بمانند
+  // (store ممکن است blob: موقت باشد که بیرون از صفحه می‌میرد)
+  const toDataUrl=async(src)=>{
+   if(!src)return '';
+   if(src.startsWith('data:'))return src;
+   try{
+    const rr=await fetch(src);
+    if(!rr.ok)return src;
+    const ob=await rr.blob();
+    return await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.onerror=()=>res(src);fr.readAsDataURL(ob);});
+   }catch(e){return src;}
+  };
+  const srcBefore=await toDataUrl(store.before||'');
+  const srcAfter=await toDataUrl(store.after||'');
+  // لوگو هم جاسازی می‌شود تا آفلاین دیده شود
+  const logoDataUrl=await toDataUrl('/logo.jpg');
   // ساخت تصاویر گریددار
   const gridImgBefore=await addGridToImage(srcBefore,gn);
   const gridImgAfter=await addGridToImage(srcAfter,gn);
@@ -1179,6 +1194,9 @@ async function makeReport(fmt){
   .photos-row{display:flex;gap:12px;flex-wrap:wrap}.photos-row>div{flex:1;min-width:200px}
   h2{color:#1a7f37}h3{color:#333;border-bottom:2px solid #1a7f37;padding-bottom:6px}</style></head><body>
   <h2>📷 گزارش تحلیلی fsfmonitor</h2>
+  <div class="card" style="text-align:center"><img src="${logoDataUrl}" alt="FSFmonitor" style="width:140px;height:140px;object-fit:cover;border-radius:50%">
+  <p style="color:#e07b1a;font-weight:bold;margin:6px 0 0">Flash Smelting Furnace Monitor</p>
+  <p class="photo-info" style="margin:2px 0 0">COPPER / DATA / INSIGHT</p></div>
   <div class="card"><h3>عکس خام — مرجع</h3>
   <p class="photo-info">📌 <b>عکس مرجع</b></p>
   <img id="imgRef" src="${gridImgBefore}">

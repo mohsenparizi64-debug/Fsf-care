@@ -106,6 +106,14 @@ def build_report(
     st_small = ParagraphStyle("s", fontName="Vazir", fontSize=9, leading=14,
                               alignment=2, wordWrap="RTL")
     story = []
+    logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "logo.jpg")
+    if os.path.exists(logo_path):
+        try:
+            logo_im = _img(logo_path, max_w=42 * mm, max_h=42 * mm)
+            if logo_im is not None:
+                story.append(logo_im)
+        except Exception:
+            pass
     story.append(Paragraph(_rtl("📷 گزارش تحلیلی fsfmonitor"), st_title))
     story.append(Spacer(1, 4 * mm))
     story.append(Paragraph(_rtl(f"پروژه: {project}"), st_h))
