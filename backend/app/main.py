@@ -109,9 +109,48 @@ def logo():
 @app.get("/favicon.ico")
 def favicon():
     from fastapi.responses import FileResponse
+    ico = os.path.join(FRONTEND_DIR, "favicon.ico")
+    if os.path.exists(ico):
+        return FileResponse(ico, media_type="image/x-icon")
     if os.path.exists(_LOGO_PATH):
         return FileResponse(_LOGO_PATH, media_type="image/jpeg")
     raise HTTPException(404, "logo not found")
+
+
+@app.get("/apple-touch-icon.png")
+def apple_touch_icon():
+    from fastapi.responses import FileResponse
+    p = os.path.join(FRONTEND_DIR, "apple-touch-icon.png")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="image/png")
+    raise HTTPException(404, "icon not found")
+
+
+@app.get("/icon-192.png")
+def icon_192():
+    from fastapi.responses import FileResponse
+    p = os.path.join(FRONTEND_DIR, "icon-192.png")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="image/png")
+    raise HTTPException(404, "icon not found")
+
+
+@app.get("/icon-512.png")
+def icon_512():
+    from fastapi.responses import FileResponse
+    p = os.path.join(FRONTEND_DIR, "icon-512.png")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="image/png")
+    raise HTTPException(404, "icon not found")
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    from fastapi.responses import FileResponse
+    p = os.path.join(FRONTEND_DIR, "manifest.webmanifest")
+    if os.path.exists(p):
+        return FileResponse(p, media_type="application/manifest+json")
+    raise HTTPException(404, "manifest not found")
 
 
 # ---------- احراز هویت ----------
