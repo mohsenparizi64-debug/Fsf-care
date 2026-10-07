@@ -1374,29 +1374,33 @@ async function loadPreviewRegions(baseOvUrl){
  _selRegions.clear();
  _regionBaseImg=null;_pvBaseImg=null;
  try{
+  msg.textContent='⏳ در حال ارسال عکس‌ها به سرور...';
   const fd=new FormData();
   fd.append('before',await dataUrlToBlob(store.before),'before.jpg');
   fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
   fd.append('px_per_mm',document.getElementById('ppm').value||0);
-  const r=await api('/api/regions',{method:'POST',body:fd});
-  let j=null;
+  let r,j=null;
+  try{r=await api('/api/regions',{method:'POST',body:fd});}
+  catch(fe){msg.textContent='⚠️ ارسال به سرور ناتمام ماند ('+((fe&&fe.message)||fe||'نامشخص')+') — وای‌فای را چک کن و دوباره بزن';return;}
   try{j=await r.json();}
   catch(pe){msg.textContent='⚠️ پاسخ غیرمنتظره از سرور (HTTP '+r.status+') — دوباره «نمایش همپوشانی» را بزن';return;}
   if(!r.ok||!j.ok){msg.textContent='⚠️ خطا (HTTP '+r.status+'): '+((j&&(j.error||j.detail))||r.statusText||'نامشخص');return;}
   _regions=j.regions;
   if(!_regions.length){msg.textContent='نقطه‌ای بزرگتر از ۲۰۰px پیدا نشد';return;}
-  const img=new Image();
-  img.crossOrigin='anonymous';
-  await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=baseOvUrl;});
-  _pvBaseImg=img;_regionBaseImg=img;
-  _regionOvDataUrl=drawNumbered(img,_regions,_selRegions,false,'pvImg');
-  // لیست چکباکس با علامت
+  // لیست انتخاب را اول می‌سازیم تا حتی اگر بارگذاری تصویر ناموفق بود، انتخاب ممکن باشد
   rList.innerHTML=_regions.map(rg=>
    `<label style="display:flex;align-items:center;gap:4px;font-size:12px;background:#fff;border:1px solid #ddd;border-radius:8px;padding:4px 8px;cursor:pointer">
     <input type="checkbox" id="rchk${rg.number}" onchange="toggleRegion(${rg.number},this.checked)">
     <span style="color:${rg.type==='growth'?'#1a7f37':'#b42318'};font-weight:bold">${rg.sign}</span>
     <span>نقطه ${fa(rg.number)}</span>
    </label>`).join('');
+  msg.textContent='⏳ در حال رسم شماره‌ها روی تصویر...';
+  const img=new Image();
+  img.crossOrigin='anonymous';
+  try{await new Promise((res,rej)=>{img.onload=res;img.onerror=()=>rej(new Error('بارگذاری تصویر همپوشانی ناموفق'));img.src=baseOvUrl;});}
+  catch(ie){msg.textContent='✅ '+fa(_regions.length)+' نقطه آماده است (شماره روی تصویر نیامد — از همین لیست تیک بزن):';return;}
+  _pvBaseImg=img;_regionBaseImg=img;
+  _regionOvDataUrl=drawNumbered(img,_regions,_selRegions,false,'pvImg');
   // ضربه روی تصویر: مختصات نمایشی → مختصات واقعی (مقیاس‌پذیر، سازگار موبایل)
   const rov=document.getElementById('pvImg');
   rov.onclick=(ev)=>{
