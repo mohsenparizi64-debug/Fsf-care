@@ -1465,7 +1465,7 @@ async function previewOverlay(){
   try{await loadPreviewRegions(j.overlay_url);
    st.textContent='✅ ۱۰ نقطه بیشترین تغییر آماده انتخاب است';
   }catch(e){}
- }catch(e){st.textContent='خطای ارتباط با سرور';}
+ }catch(e){st.textContent='⚠️ قطع ارتباط موقع ساخت همپوشانی ('+((e&&e.message)||e||'نامشخص')+') — اینترنت/فیلترشکن را چک کن و دوباره بزن';}
 }
 async function go(){
  if(!store.before||!store.after){alert('هر دو عکس مرجع و دوم را مشخص کن');return;}
