@@ -1211,9 +1211,9 @@ async function makeReport(fmt){
   <label>تراکم: <select onchange="changeGrid('imgSec','${srcAfter}',this.value)">${[2,3,4,5,6,8,10,12,15,20].map(n=>`<option value="${n}"${n===gn?' selected':''}>${n}×${n}</option>`).join('')}</select></label></div></div>`;
   // خلاصه — برای تحلیل محدود فقط نقاط انتخابی، بدون پهنا/جهت کلی
   h+=`<div class="card"><h3>خلاصه تغییرات</h3>
-  <p>مساحت ${a.scoped?'نقاط انتخابی':'نیمرخ'}: <b class="${cls(a.area_px.change_pct)}">${a.area_px.change_pct}٪</b></p>`;
+  <p>مساحت ${a.scoped?'نقاط انتخابی':'نیمرخ'}: <b class="${cls(a.area_px.change_pct)}">${chgTxt(a.area_px)}</b></p>`;
   if(a.scoped){
-   h+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
+   h+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${chgTxt(a.volume_proxy_px3)}</b></p></div>`;
   }else{
    h+=`<p>پهنا: <b class="${cls(a.bbox_px.width_change_pct)}">${a.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(a.bbox_px.height_change_pct)}">${a.bbox_px.height_change_pct}٪</b></p>
    <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
@@ -1248,13 +1248,12 @@ async function makeReport(fmt){
    h+=`<div class="card"><h3>🎯 تفکیکی نقاط انتخابی (${fa(a.regions.length)} نقطه)</h3>`;
    h+=`<table><tr><th>#</th><th>نوع تغییر</th><th>مرجع (px²)</th><th>دوم (px²)</th><th>تغییر</th><th>جهت</th></tr>`;
    for(const rg of a.regions){
-    const isGrowth=rg.type==='growth';
     const ap=rg.area_px||{};
     h+=`<tr><td><b>${fa(rg.number)}</b></td>
-    <td><b style="color:${isGrowth?'#1a7f37':'#b42318'}">${isGrowth?'📈 رشد (+)':'📉 کاهش (−)'}</b></td>
+    <td><b style="color:${typeCol(rg)}">${typeTxt(rg)}</b></td>
     <td>${fa(ap.before)}</td>
     <td>${fa(ap.after)}</td>
-    <td class="${cls(ap.change_pct)}">${ap.change_pct}٪</td>
+    <td class="${cls(ap.change_pct)}">${chgTxt(ap)}</td>
     <td>${rg.direction}</td></tr>`;
    }
    h+='</table></div>';
@@ -1435,6 +1434,10 @@ function downloadBlob(blob,name){
 
 /* ===== تحلیل ===== */
 function cls(v){return v>0?'pos':(v<0?'neg':'');}
+// نمایش تغییر: اگر درصد قابل اتکا نیست، برچسب متنی (ظهور/حذف/مبنای کوچک)
+function chgTxt(ap){ap=ap||{};if(ap.change_kind&&ap.change_kind!=='pct')return ap.change_label||'—';const v=ap.change_pct;return (v===null||v===undefined)?'—':v+'٪';}
+function typeTxt(rg){if(!rg)return '➖ بدون تغییر';if(rg.type==='growth')return '📈 رشد (+)';if(rg.type==='shrink')return '📉 کاهش (−)';return '➖ بدون تغییر';}
+function typeCol(rg){if(!rg)return '#666';return rg.type==='growth'?'#1a7f37':(rg.type==='shrink'?'#b42318':'#666');}
 async function previewOverlay(){
  if(!store.before||!store.after){alert('هر دو عکس مرجع و دوم را مشخص کن');return;}
  const st=document.getElementById('st');
@@ -1477,19 +1480,18 @@ async function go(){
   if(!j.ok){document.getElementById('st').textContent='خطا: '+j.error;return;}
   document.getElementById('st').textContent='';
   document.getElementById('out').style.display='block';
-  let s=`<p>مساحت نقاط انتخابی: <b class="${cls(j.area_px.change_pct)}">${j.area_px.change_pct}٪</b> (${j.area_px.before} ← ${j.area_px.after} px²)</p>`;
-  s+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(j.volume_proxy_px3.change_pct)}">${j.volume_proxy_px3.change_pct}٪</b></p>`;
+  let s=`<p>مساحت نقاط انتخابی: <b class="${cls(j.area_px.change_pct)}">${chgTxt(j.area_px)}</b> (${j.area_px.before} ← ${j.area_px.after} px²)</p>`;
+  s+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(j.volume_proxy_px3.change_pct)}">${chgTxt(j.volume_proxy_px3)}</b></p>`;
   if(j.scale)s+=`<p>مساحت: ${j.scale.area_mm2.before} ← ${j.scale.area_mm2.after} mm²<br>حجم تخمینی: ${j.scale.volume_proxy_mm3.before} ← ${j.scale.volume_proxy_mm3.after} mm³</p>`;
   document.getElementById('sum').innerHTML=s;
   // جدول هر نقطه
   document.getElementById('regSec').style.display='block';
   document.getElementById('tbReg').innerHTML=(j.regions||[]).map(rg=>{
-   const g=rg.type==='growth';
    const ap=rg.area_px;
    return `<tr><td><b>${fa(rg.number)}</b></td>
-    <td style="color:${g?'#1a7f37':'#b42318'};font-weight:bold">${g?'📈 رشد (+)':'📉 کاهش (−)'}</td>
+    <td style="color:${typeCol(rg)};font-weight:bold">${typeTxt(rg)}</td>
     <td>${ap.before}</td><td>${ap.after}</td>
-    <td><b class="${cls(ap.change_pct)}">${ap.change_pct}٪</b></td>
+    <td><b class="${cls(ap.change_pct)}">${chgTxt(ap)}</b></td>
     <td>${rg.direction}</td></tr>`;}).join('');
   // جدول جهت فقط برای تحلیل کلی (خالی برای محدود)
   const hasDirs=(j.directions||[]).length>0;
@@ -1497,6 +1499,11 @@ async function go(){
   document.getElementById('dirT').style.display=hasDirs?'block':'none';
   document.getElementById('tb').innerHTML=hasDirs?j.directions.map(d=>`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`).join(''):'';
   // تصویر نتیجه: انتخاب‌شده پررنگ، بقیه کم‌رنگ
+  // رنگ دایره‌ها را با «نوع» تحلیل‌شده (مبنای مساحت) همگام می‌کنیم تا با جدول یکی شود
+  try{
+   const amap={};for(const rg of (j.regions||[]))amap[rg.number]=rg;
+   for(const rg of _regions){const a2=amap[rg.number];if(a2){rg.type=a2.type;rg.sign=a2.sign;}}
+  }catch(e){}
   const ovBase=new Image();ovBase.crossOrigin='anonymous';
   await new Promise((res,rej)=>{ovBase.onload=res;ovBase.onerror=rej;ovBase.src=j.overlay_url;});
   const ovUrl=drawNumbered(ovBase,_regions,_selRegions,true,'ov');

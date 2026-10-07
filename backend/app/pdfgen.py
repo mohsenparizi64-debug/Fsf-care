@@ -74,9 +74,29 @@ def _rtl(text):
 
 def _pct(v):
     try:
+        if v is None:
+            return "—"
         return _fa_digits(f"{float(v):.2f}") + "٪"
     except (TypeError, ValueError):
         return "—"
+
+
+def _chg_cell(ap):
+    """سلول تغییر: درصد قابل اتکا → عدد؛ وگرنه برچسب متنی (ظهور/حذف/مبنای کوچک)."""
+    if not isinstance(ap, dict):
+        return _pct(ap)
+    if ap.get("change_kind") and ap.get("change_kind") != "pct":
+        return _rtl(str(ap.get("change_label") or "—"))
+    return _pct(ap.get("change_pct"))
+
+
+def _type_fa(rg):
+    t = (rg or {}).get("type")
+    if t == "growth":
+        return _rtl("رشد (+)")
+    if t == "shrink":
+        return _rtl("کاهش (−)")
+    return _rtl("بدون تغییر")
 
 
 def build_report(
@@ -163,10 +183,10 @@ def build_report(
     sc = analysis.get("scale") or {}
     rows = [
         [_rtl("شاخص"), _rtl("مرجع"), _rtl("دوم"), _rtl("تغییر")],
-        [_rtl("مساحت نیمرخ (px²)"), _fa_digits(ap.get("before")), _fa_digits(ap.get("after")), _pct(ap.get("change_pct"))],
+        [_rtl("مساحت نیمرخ (px²)"), _fa_digits(ap.get("before")), _fa_digits(ap.get("after")), _chg_cell(ap)],
         [_rtl("پهنا (px)"), _fa_numbers_list(bb.get("before_wh")), _fa_numbers_list(bb.get("after_wh")), _pct(bb.get("width_change_pct"))],
         [_rtl("ارتفاع (px)"), "—", "—", _pct(bb.get("height_change_pct"))],
-        [_rtl("حجم تخمینی (px³)"), _fa_digits(vp.get("before")), _fa_digits(vp.get("after")), _pct(vp.get("change_pct"))],
+        [_rtl("حجم تخمینی (px³)"), _fa_digits(vp.get("before")), _fa_digits(vp.get("after")), _chg_cell(vp)],
     ]
     if sc.get("area_mm2"):
         rows.append([_rtl("مساحت (mm²)"), _fa_digits(sc["area_mm2"].get("before")),
@@ -226,9 +246,9 @@ def build_report(
             ap = rg.get("area_px", {})
             rrows.append([
                 _fa_digits(rg.get("number")),
-                _rtl("رشد (+)" if rg.get("type") == "growth" else "کاهش (−)"),
+                _type_fa(rg),
                 _fa_digits(ap.get("before")), _fa_digits(ap.get("after")),
-                _pct(ap.get("change_pct")), _rtl(str(rg.get("direction", ""))),
+                _chg_cell(ap), _rtl(str(rg.get("direction", ""))),
             ])
         rtbl = Table(rrows, colWidths=[14 * mm, 26 * mm, 32 * mm, 32 * mm, 26 * mm, 28 * mm])
         rtbl.setStyle(TableStyle([

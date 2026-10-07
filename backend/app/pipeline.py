@@ -384,6 +384,50 @@ def volume_proxy_in_bbox(mask_full, bbox):
     return vol
 
 
+_AREA_ZERO = 0.5
+_AREA_TINY = 200.0
+
+
+def _area_change(before, after):
+    """نوع تغییر از روی مساحت اندازه‌گیری‌شده (مرجع در برابر دوم)، نه ماسک رنگ.
+
+    برمی‌گرداند: (type, sign, change_pct|None, kind, label|None)
+    kind یکی از: pct | emerged | removed | empty | tiny_base
+    """
+    b = float(before)
+    a = float(after)
+    if b <= _AREA_ZERO and a <= _AREA_ZERO:
+        return ("none", "", None, "empty", "—")
+    if b <= _AREA_ZERO:
+        return ("growth", "+", None, "emerged", "ظهور (نقطه جدید)")
+    if a <= _AREA_ZERO:
+        return ("shrink", "−", None, "removed", "حذف کامل")
+    if b < _AREA_TINY:
+        if a > b:
+            return ("growth", "+", None, "tiny_base", "— (مبنای کوچک)")
+        if a < b:
+            return ("shrink", "−", None, "tiny_base", "— (مبنای کوچک)")
+        return ("none", "", None, "empty", "—")
+    if a > b:
+        return ("growth", "+", round((a - b) / b * 100, 2), "pct", None)
+    if a < b:
+        return ("shrink", "−", round((a - b) / b * 100, 2), "pct", None)
+    return ("none", "", 0.0, "pct", None)
+
+
+def _vol_change(before, after):
+    """برچسب تغییر حجم؛ آستانه «مبنای کوچک» ندارد (واحد px³ با مساحت فرق دارد)."""
+    b = float(before)
+    a = float(after)
+    if b <= _AREA_ZERO and a <= _AREA_ZERO:
+        return (None, "empty", "—")
+    if b <= _AREA_ZERO:
+        return (None, "emerged", "ظهور")
+    if a <= _AREA_ZERO:
+        return (None, "removed", "حذف")
+    return (round((a - b) / b * 100, 2) if b > 1e-9 else 0.0, "pct", None)
+
+
 def _analyze_scoped(baseline_path, followup_path, px_per_mm, inset, selected):
     """تحلیل محدود به نقاط انتخاب‌شده کاربر (شماره‌های extract_regions).
 
@@ -427,14 +471,22 @@ def _analyze_scoped(baseline_path, followup_path, px_per_mm, inset, selected):
         a_after = float(m2_full[y0:y1, x0:x1].sum()) if x1 > x0 and y1 > y0 else 0.0
         v_before = volume_proxy_in_bbox(m1_full, r["bbox"])
         v_after = volume_proxy_in_bbox(m2_full, r["bbox"])
+        rtype, sign, cpct, ckind, clabel = _area_change(a_before, a_after)
+        vpct, vkind, vlabel = _vol_change(v_before, v_after)
+        if ckind in ("tiny_base", "empty"):
+            # مبنای مساحت غیرقابل اتکاست → درصد حجم هم اعتبار ندارد
+            vpct, vkind, vlabel = None, ckind, clabel
         entry = {
-            "number": r["number"], "type": r["type"], "sign": r["sign"],
+            "number": r["number"], "type": rtype, "sign": sign,
+            "chroma_type": r["type"], "chroma_sign": r["sign"],
             "direction": r["direction"], "pct": r["pct"],
             "cx": r["cx"], "cy": r["cy"], "bbox": r["bbox"],
             "area_px": {"before": round(a_before, 1), "after": round(a_after, 1),
-                        "change_pct": round(pct(a_before, a_after), 2)},
+                        "change_pct": cpct, "change_kind": ckind,
+                        "change_label": clabel},
             "volume_proxy_px3": {"before": round(v_before, 1), "after": round(v_after, 1),
-                                 "change_pct": round(pct(v_before, v_after), 2)},
+                                 "change_pct": vpct, "change_kind": vkind,
+                                 "change_label": vlabel},
         }
         if px_per_mm and px_per_mm > 0:
             entry["area_mm2"] = {"before": round(a_before / px_per_mm ** 2, 2),
@@ -443,21 +495,31 @@ def _analyze_scoped(baseline_path, followup_path, px_per_mm, inset, selected):
                                          "after": round(v_after / px_per_mm ** 3, 2)}
         out_regions.append(entry)
 
-    tot_ab = sum(e["area_px"]["before"] for e in out_regions)
-    tot_aa = sum(e["area_px"]["after"] for e in out_regions)
-    tot_vb = sum(e["volume_proxy_px3"]["before"] for e in out_regions)
-    tot_va = sum(e["volume_proxy_px3"]["after"] for e in out_regions)
+    scoped_regions = [e for e in out_regions
+                      if e["area_px"].get("change_kind") != "empty"]
+    tot_ab = sum(e["area_px"]["before"] for e in scoped_regions)
+    tot_aa = sum(e["area_px"]["after"] for e in scoped_regions)
+    tot_vb = sum(e["volume_proxy_px3"]["before"] for e in scoped_regions)
+    tot_va = sum(e["volume_proxy_px3"]["after"] for e in scoped_regions)
+    _, _, tot_cpct, tot_ckind, tot_clabel = _area_change(tot_ab, tot_aa)
+    tot_vpct, tot_vkind, tot_vlabel = _vol_change(tot_vb, tot_va)
     res = {
         "scoped": True,
         "selected": [e["number"] for e in out_regions],
         "regions": out_regions,
         "area_px": {"before": round(tot_ab, 1), "after": round(tot_aa, 1),
-                    "change_pct": round(pct(tot_ab, tot_aa), 2)},
+                    "change_pct": tot_cpct, "change_kind": tot_ckind,
+                    "change_label": tot_clabel},
         "volume_proxy_px3": {"before": round(tot_vb, 1), "after": round(tot_va, 1),
-                             "change_pct": round(pct(tot_vb, tot_va), 2)},
+                             "change_pct": tot_vpct, "change_kind": tot_vkind,
+                             "change_label": tot_vlabel},
         "directions": [],
         "note_fa": ("تحلیل محدود به نقاط انتخاب‌شده است؛ مساحت و حجم هر نقطه فقط "
-                    "داخل همان ناحیه سنجیده شده و بقیه تصویر نادیده گرفته شده است."),
+                    "داخل همان ناحیه سنجیده شده و بقیه تصویر نادیده گرفته شده است. "
+                    "ستون «نوع» از مقایسه مساحت مرجع و دوم به‌دست می‌آید "
+                    "(نه از رنگ اختلاف)؛ «ظهور» یعنی نقطه در مرجع نبود، "
+                    "«حذف» یعنی در دوم نیست، و «مبنای کوچک» یعنی مرجع زیر ۲۰۰px "
+                    "است و درصد قابل اتکا نیست."),
     }
     if px_per_mm and px_per_mm > 0:
         res["scale"] = {"px_per_mm": px_per_mm,
