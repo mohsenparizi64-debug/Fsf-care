@@ -1379,8 +1379,10 @@ async function loadPreviewRegions(baseOvUrl){
   fd.append('after',await dataUrlToBlob(store.after),'after.jpg');
   fd.append('px_per_mm',document.getElementById('ppm').value||0);
   const r=await api('/api/regions',{method:'POST',body:fd});
-  const j=await r.json();
-  if(!j.ok){msg.textContent='خطا: '+(j.error||j.detail||'');return;}
+  let j=null;
+  try{j=await r.json();}
+  catch(pe){msg.textContent='⚠️ پاسخ غیرمنتظره از سرور (HTTP '+r.status+') — دوباره «نمایش همپوشانی» را بزن';return;}
+  if(!r.ok||!j.ok){msg.textContent='⚠️ خطا (HTTP '+r.status+'): '+((j&&(j.error||j.detail))||r.statusText||'نامشخص');return;}
   _regions=j.regions;
   if(!_regions.length){msg.textContent='نقطه‌ای بزرگتر از ۲۰۰px پیدا نشد';return;}
   const img=new Image();
@@ -1411,7 +1413,7 @@ async function loadPreviewRegions(baseOvUrl){
    if(best&&bestD<Math.max(40,_pvBaseImg.naturalWidth*0.05))toggleRegion(best.number);
   };
   msg.textContent=fa(_regions.length)+' نقطه با بزرگترین تغییرات — انتخاب کن:';
- }catch(e){msg.textContent='خطای ارتباط با سرور';}
+ }catch(e){msg.textContent='⚠️ قطع ارتباط موقع استخراج نقاط ('+((e&&e.message)||e||'نامشخص')+') — اینترنت/فیلترشکن را چک کن و دوباره «نمایش همپوشانی» را بزن';}
 }
 
 function toggleRegion(num,fromCheckbox){
