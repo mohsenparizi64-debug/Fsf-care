@@ -1222,7 +1222,7 @@ async function makeReport(fmt){
    for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
    h+=`</table></div>`;
   }
-  // تصویر تطبیقی — به dataURL تبدیل میشود چون فایل دانلودی لوکال باز میشود
+  // ── عکس همپوشانی (پیشنمایش: ۱۰ نقطه بیشترین تغییر) + خروجی نهایی (نتیجه تحلیل) ──
   let overlayDataUri='';
   if(a.overlay_url){
    try{
@@ -1233,7 +1233,15 @@ async function makeReport(fmt){
     }
    }catch(e){}
   }
-  if(overlayDataUri)h+=`<div class="card"><h3>تصویر تطبیقی</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
+  // آنچه واقعاً روی صفحه دیده می‌شود (منبع حقیقت): pvImg = همپوشانی، ov = خروجی نهایی
+  let _pvSrc=''; try{const _pv=document.getElementById('pvImg'); const _bx=document.getElementById('pvBox'); if(_pv&&_bx&&_bx.style.display!=='none'&&_pv.naturalWidth>0)_pvSrc=_pv.src||'';}catch(e){}
+  let _ovSrc=''; try{const _o=document.getElementById('ov'); const _ox=document.getElementById('out'); if(_o&&_ox&&_ox.style.display!=='none'&&_o.naturalWidth>0)_ovSrc=_o.src||'';}catch(e){}
+  let pvDataUri=_pvSrc.startsWith('data:')?_pvSrc:(_pvSrc?await toDataUrl(_pvSrc):'');
+  let finalDataUri=_ovSrc.startsWith('data:')?_ovSrc:(_ovSrc?await toDataUrl(_ovSrc):'');
+  if(pvDataUri)h+=`<div class="card"><h3>عکس همپوشانی — ${_selRegions.size?fa(_selRegions.size)+' نقطه انتخابی از ':''}۱۰ نقطه بیشترین تغییر</h3><img src="${pvDataUri}"><p style="color:#666;font-size:13px">دایره سبز = رشد (+) | دایره قرمز = کاهش (−) — روی شماره ضربه بزن تا انتخاب/لغو شه</p></div>`;
+  else if(overlayDataUri)h+=`<div class="card"><h3>عکس همپوشانی</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
+  if(finalDataUri&&finalDataUri!==pvDataUri)h+=`<div class="card"><h3>خروجی نهایی — نتیجه تحلیل</h3><img src="${finalDataUri}"><p style="color:#666;font-size:13px">حلقه سبز ضخیم = نقاط انتخاب‌شده تحلیل‌شده | کادر خاکستری کم‌رنگ = انتخاب‌نشده</p></div>`;
+  else if(overlayDataUri&&overlayDataUri!==pvDataUri)h+=`<div class="card"><h3>خروجی نهایی — نتیجه تحلیل</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
   if(a.note_fa)h+=`<div class="card"><p>${a.note_fa}</p></div>`;
   // ── تفکیکی نقاط تحلیل‌شده (اعداد واقعی مرجع/دوم داخل هر نقطه) ──
   if(a.scoped&&(a.regions||[]).length){
@@ -1250,8 +1258,6 @@ async function makeReport(fmt){
     <td>${rg.direction}</td></tr>`;
    }
    h+='</table></div>';
-   // overlay با شماره‌ها (انتخابی پررنگ)
-   if(_regionOvDataUrl)h+=`<div class="card"><h3>تصویر همپوشانی با نقاط انتخابی</h3><img src="${_regionOvDataUrl}" style="max-width:100%"><p style="color:#666;font-size:13px">دایره سبز = رشد (+) | دایره قرمز = کاهش (−)</p></div>`;
   }
   // اسکریپت گرید
   h+=`<script>
