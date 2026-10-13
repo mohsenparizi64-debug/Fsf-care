@@ -476,7 +476,7 @@ async def api_preview_overlay(
     with open(p2, "wb") as f:
         f.write(await after.read())
     try:
-        overlay = make_overlay(p1, p2, inset=float(inset))
+        overlay = make_overlay(p1, p2)
     except ValueError as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
     ov_path = os.path.join(UPLOAD_DIR, f"pv_{uid}_overlay.jpg")

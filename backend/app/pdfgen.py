@@ -179,21 +179,16 @@ def build_report(
     story.append(Paragraph(_rtl("خلاصه تغییرات"), st_h))
     ap = analysis.get("area_px", {})
     bb = analysis.get("bbox_px", {})
-    vp = analysis.get("volume_proxy_px3", {})
     sc = analysis.get("scale") or {}
     rows = [
         [_rtl("شاخص"), _rtl("مرجع"), _rtl("دوم"), _rtl("تغییر")],
         [_rtl("مساحت نیمرخ (px²)"), _fa_digits(ap.get("before")), _fa_digits(ap.get("after")), _chg_cell(ap)],
         [_rtl("پهنا (px)"), _fa_numbers_list(bb.get("before_wh")), _fa_numbers_list(bb.get("after_wh")), _pct(bb.get("width_change_pct"))],
         [_rtl("ارتفاع (px)"), "—", "—", _pct(bb.get("height_change_pct"))],
-        [_rtl("حجم تخمینی (px³)"), _fa_digits(vp.get("before")), _fa_digits(vp.get("after")), _chg_cell(vp)],
     ]
     if sc.get("area_mm2"):
         rows.append([_rtl("مساحت (mm²)"), _fa_digits(sc["area_mm2"].get("before")),
                      _fa_digits(sc["area_mm2"].get("after")), "—"])
-    if sc.get("volume_proxy_mm3"):
-        rows.append([_rtl("حجم تخمینی (mm³)"), _fa_digits(sc["volume_proxy_mm3"].get("before")),
-                     _fa_digits(sc["volume_proxy_mm3"].get("after")), "—"])
     tbl = Table(rows, colWidths=[52 * mm, 38 * mm, 38 * mm, 28 * mm])
     style = [
         ("FONTNAME", (0, 0), (-1, -1), "Vazir"),
@@ -234,7 +229,7 @@ def build_report(
         if im is not None:
             story.append(Paragraph(_rtl("تصویر تطبیقی"), st_h))
             story.append(im)
-            story.append(Paragraph(_rtl("(آبی = مرجع، قرمز = دوم)"), st_small))
+            story.append(Paragraph(_rtl("(آبی = کاهش، قرمز = رشد)"), st_small))
     # نقاط انتخابی تحلیل محدود
     sregs = analysis.get("regions") or []
     if analysis.get("scoped") and sregs:

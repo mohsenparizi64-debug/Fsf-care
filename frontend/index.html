@@ -177,6 +177,8 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 #shutter{width:76px;height:76px;border-radius:50%;border:4px solid #fff;background:rgba(255,255,255,.25);cursor:pointer;flex:none;transition:.15s;position:relative;z-index:10}
 #shutter:active{transform:scale(.92);background:rgba(255,255,255,.5)}
 #shutter.busy{opacity:.5;pointer-events:none}
+#shutter.shake-warn{background:rgba(255,180,0,.35);border-color:#ffc400;animation:shakepulse .7s ease-in-out infinite}
+@keyframes shakepulse{0%,100%{box-shadow:0 0 0 0 rgba(255,196,0,.55)}50%{box-shadow:0 0 0 12px rgba(255,196,0,0)}}
 #camHint{color:#eee;font-size:12px;flex:1;text-align:center}
 #camToolMsgF{color:#ffe082;font-size:12px;text-align:center;margin-top:6px;min-height:16px}
 /* سوئیچها */
@@ -228,6 +230,14 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 <p class="muted" style="margin-top:0">با زدن «شروع دوربین»، دوربین تمام‌صفحه با گرید و شبه تصویر مرجع و همه ابزارها باز می‌شود. هر عکس ثبت‌شده خودکار در گالری پروژه ذخیره می‌شود و دوربین برای عکس بعدی آماده می‌ماند.</p>
 <div class="row">
 <button class="go" onclick="openCam()">📸 شروع دوربین</button>
+</div>
+</div>
+<div class="card">
+<h4 style="margin:0 0 6px">🧰 مسیرهای دیگر (توصیه برای عکس لرزشکم)</h4>
+<p class="muted" style="margin-top:0">با «دوربین گوشی»، برنامه دوربین خود گوشی باز می‌شود و همه امکانات سخت‌افزاری آن (ضدلرزش، فوکوس خودکار، HDR) فعال می‌شود. «از گالری گوشی» هم عکس‌های قبلی را وارد می‌کند.</p>
+<div class="row">
+<button class="secondary" onclick="nativeShootF()">📷 دوربین گوشی</button>
+<button class="secondary" onclick="pickPhoneGalleryF()">🖼 از گالری گوشی</button>
 </div>
 </div>
 </div>
@@ -296,7 +306,7 @@ b.pos{color:#1a7f37}b.neg{color:#b42318}
 </div>
 <h4 id="dirH" style="display:none">رشد جهتی (٪)</h4>
 <table id="dirT" style="display:none"><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr><tbody id="tb"></tbody></table>
-<h4>تصویر تطبیقی <span class="muted">(آبی=مرجع، قرمز=دوم)</span></h4>
+<h4>تصویر تطبیقی <span class="muted">(آبی=کاهش، قرمز=رشد)</span></h4>
 <img id="ov" class="result">
 <p class="muted" id="note"></p>
 <hr style="margin:12px 0;border:none;border-top:1px solid #e0e0e0">
@@ -513,6 +523,9 @@ async function deleteProject(name){
 /* ===== دوربین تمام‌صفحه ===== */
 let gridN=6, stream=null, face='environment', zoom=1, zoomCaps=null, camOpen=false;
 let camCapsCache=null, curScene='normal', torchOn=false, camBusy=false;
+/* --- قفل شاتر با شتاب‌سنج --- */
+const STILL_THRESHOLD=0.6;    // میانگین شتاب غیر از جاذبه زیر این مقدار = ثابت
+const STILL_SETTLE_MS=400;    // باید حداقل این مدت ثابت مانده باشد
 const store={before:null,after:null};
 let pick={ref:null,other:null};
 
@@ -531,11 +544,12 @@ async function openCam(){
  document.getElementById('camFullscreen').classList.add('on');
  camOpen=true;
  buildCamTools();updateShutterLock();layoutBox();
+ startMotionWatch();
  try{
   if(stream)stream.getTracks().forEach(t=>t.stop());
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:face,width:{ideal:1280}},audio:false});
   const v=document.getElementById('videoF');v.srcObject=stream;
-  v.onloadedmetadata=()=>{drawGrid();detectCaps();};
+  v.onloadedmetadata=()=>{drawGrid();detectCaps();buildImageCapture();};
  }catch(e){
   document.getElementById('camToolMsgF').textContent='⚠️ دسترسی به دوربین ممکن نشد: '+e.message;
  }
@@ -563,8 +577,19 @@ function detectCaps(){
   if(!ts||!ts.length)return;
   camCapsCache=ts[0].getCapabilities();
   if(camCapsCache&&camCapsCache.zoom)zoomCaps=camCapsCache;
+  // ضدلرزش: پیش‌فرض روشن — لرزش موقع عکس‌برداری کم می‌شود
+  stabilizeOn();
   buildCamTools();
  }catch(e){camCapsCache=null;}
+}
+/* --- ضدلرزش پیش‌فرض --- */
+function stabilizeOn(){
+ try{
+  const t=stream&&stream.getVideoTracks()[0];
+  if(!t||!camCapsCache||!camCapsCache.imageStabilization)return;
+  if(Array.isArray(camCapsCache.imageStabilization)&&!camCapsCache.imageStabilization.includes('on'))return;
+  t.applyConstraints({advanced:[{imageStabilization:'on'}]}).catch(()=>{});
+ }catch(e){}
 }
 function caps(){return camCapsCache||{};}
 /* --- ساخت ابزارها بر اساس پشتیبانی --- */
@@ -709,7 +734,7 @@ async function switchCamF(){
   if(stream)stream.getTracks().forEach(t=>t.stop());
   stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:face,width:{ideal:1280}},audio:false});
   const v=document.getElementById('videoF');v.srcObject=stream;
-  v.onloadedmetadata=()=>{drawGrid();detectCaps();};
+  v.onloadedmetadata=()=>{drawGrid();detectCaps();buildImageCapture();};
   camMsg('🔄 دوربین عوض شد');
  }catch(e){camMsg('⚠️ خطا: '+e.message);}
 }
@@ -733,7 +758,38 @@ function updateShutterLock(){
  const sh=document.getElementById('shutter');
  if(!sh)return;
  sh.classList.remove('off');
+ sh.classList.remove('shake-warn');
 }
+/* --- قفل شاتر با شتاب‌سنج: ثبت فقط وقتی گوشی ثابت است --- */
+let motion=null, lastShake=0;
+function startMotionWatch(){
+ if(motion)return;
+ if(!('DeviceMotionEvent' in window))return;
+ try{
+  // آیفون نیاز به درخواست اجازه دارد
+  if(typeof DeviceMotionEvent.requestPermission==='function'){
+   DeviceMotionEvent.requestPermission().then(s=>{if(s==='granted')bindMotion();}).catch(()=>{});
+  }else bindMotion();
+ }catch(e){}
+}
+function bindMotion(){
+ if(motion)return;
+ let mag=0;
+ motion=e=>{
+  const a=e.accelerationIncludingGravity;
+  if(!a)return;
+  const m=Math.hypot(a.x||0,a.y||0,a.z||0);
+  mag=mag*0.8+(m-9.8)*0.2; // میانگین نرم از شتاب غیر از جاذبه
+  const sh=document.getElementById('shutter');
+  if(!sh)return;
+  if(camBusy){sh.classList.remove('shake-warn');return;}
+  const still=Math.abs(mag)<STILL_THRESHOLD;
+  sh.classList.toggle('shake-warn',!still);
+  if(!still)lastShake=Date.now();
+ };
+ window.addEventListener('devicemotion',motion,{passive:true});
+}
+function phoneIsStill(){return (Date.now()-lastShake)>STILL_SETTLE_MS;}
 function camMsg(t){document.getElementById('camToolMsgF').textContent=t;clearTimeout(camMsg._t);camMsg._t=setTimeout(()=>{document.getElementById('camToolMsgF').textContent='';},3000);}
 /* --- گرید روی تصویر زنده --- */
 function drawGrid(){
@@ -772,11 +828,14 @@ function pinchDist(t){const dx=t[0].clientX-t[1].clientX,dy=t[0].clientY-t[1].cl
  stage.addEventListener('touchstart',onStart,{passive:true});
  stage.addEventListener('touchmove',onMove,{passive:false});
 })();
-/* --- ثبت عکس: دقیقاً همان چیزی که داخل #captureBox دیده می‌شود --- */
-function frameF(maxSide){
- const v=document.getElementById('videoF');
- const box=document.getElementById('captureBox');
- const vw=v.videoWidth||1280,vh=v.videoHeight||720;
+/* --- ثبت عکس: دقیقاً همان چیزی که داخل #captureBox دیده می‌شود ---
+   frameCanvas روی هر منبع تصویری (ویدیوی زنده، عکس خام دوربین گوشی، فایل گالری)
+   همان برش ۳:۴ از مرکز + زوم دیجیتال + کادر قرمز + گرید را اعمال می‌کند. */
+function frameCanvas(src,maxSide){
+ if(!src)return null;
+ const vw=src.width||src.naturalWidth||src.videoWidth||0;
+ const vh=src.height||src.naturalHeight||src.videoHeight||0;
+ if(!vw||!vh)return null;
  const boxAR=3/4;
  // کادری که در صفحه می‌بینیم: نسبت ۳:۴ از مرکز تصویر خام
  let cw=vw,ch=vh;
@@ -789,30 +848,149 @@ function frameF(maxSide){
  const c=document.createElement('canvas');
  c.width=Math.round(zw*s);c.height=Math.round(zh*s);
  const ctx=c.getContext('2d');
- ctx.drawImage(v,sx,sy,zw,zh,0,0,c.width,c.height);
- // کادر قرمز و گرید روی عکس ثبت‌شده (دائمی) — همان کادر روی صفحه
- ctx.strokeStyle='rgba(255,0,0,.95)';ctx.lineWidth=Math.max(3,Math.round(c.width*0.012));
- ctx.strokeRect(ctx.lineWidth/2,ctx.lineWidth/2,c.width-ctx.lineWidth,c.height-ctx.lineWidth);
- if(document.getElementById('gridToggleF')&&document.getElementById('gridToggleF').checked){
-  ctx.strokeStyle='rgba(0,255,0,.85)';ctx.lineWidth=2;
-  for(let i=1;i<gridN;i++){ctx.beginPath();ctx.moveTo(c.width*i/gridN,0);ctx.lineTo(c.width*i/gridN,c.height);ctx.stroke();
-   ctx.beginPath();ctx.moveTo(0,c.height*i/gridN);ctx.lineTo(c.width,c.height*i/gridN);ctx.stroke();}
- }
- return c.toDataURL('image/jpeg',.85);
+ ctx.drawImage(src,sx,sy,zw,zh,0,0,c.width,c.height);
+ // کادر قرمز و گرید فقط روی صفحه نمایش (canvas#gridF overlay) کشیده می‌شوند؛
+ // سوزاندن آن‌ها داخل فایل ذخیره‌شده، لبه‌های گرید/کادر را به‌عنوان «تغییر»
+ // به خط لوله تحلیل می‌فرستد (~۸۰k پیکسل نویز). عکس ثبت‌شده باید تمیز باشد.
+ return c;
 }
+function frameF(maxSide){const c=frameCanvas(document.getElementById('videoF'),maxSide);return c?c.toDataURL('image/jpeg',.85):'';}
 async function dataUrlToBlob(u){return (await fetch(u)).blob();}
+/* --- مسیر جدید: عکس با برنامه دوربین خود گوشی + انتخاب از گالری گوشی ---
+   هر دو از همین فریم‌ورک استفاده می‌کنند: کادر قرمز/گرید همان است.
+   ورودی: File از input[type=file]. خروجی: canvas با برش ۳:۴ + کادر. */
+function imgElFromFile(f){
+ return new Promise((res,rej)=>{
+  if(!f){rej(new Error('فایلی انتخاب نشد'));return;}
+  if(!/^image\//.test(f.type)){rej(new Error('فایل تصویری نیست'));return;}
+  const el=new Image();
+  el.onload=()=>res(el);
+  el.onerror=()=>rej(new Error('بارگذاری تصویر ممکن نشد'));
+  el.src=URL.createObjectURL(f);
+ });
+}
+/* قاب قرمز/گرید را روی عکس خام گوشی حک می‌کند (canvas) */
+function canvasFromFile(f){
+ return imgElFromFile(f).then(el=>{
+  const c=frameCanvas(el,1280);
+  URL.revokeObjectURL(el.src);
+  if(!c)throw new Error('تصویر بدون ابعاد است');
+  return c;
+ });
+}
+/* دکمه «دوربین گوشی»: <input type=file accept=image/* capture=environment> */
+function nativeShootF(){
+ const proj=currentProject();
+ if(!proj){document.getElementById('projmsg').textContent='⚠️ اول پروژه را انتخاب کن یا بساز!';tab(1);return;}
+ if(!can('camera')){alert('شما دسترسی تصویربرداری ندارید');return;}
+ const inp=document.getElementById('nativeCamInput');
+ if(!inp){alert('مسیر دوربین گوشی آماده نیست');return;}
+ inp.value=''; // اجازه‌ی انتخاب مجدد همان فایل
+ inp.click();
+}
+async function nativeShootChanged(ev){
+ const f=ev.target.files&&ev.target.files[0];
+ if(!f)return;
+ const proj=currentProject();
+ if(!proj){camMsg('⚠️ پروژه انتخاب نشده');return;}
+ camBusy=true;const btn=document.getElementById('shutter');if(btn)btn.classList.add('busy');
+ camMsg('⏳ در حال پردازش عکس دوربین گوشی...');
+ try{
+  const c=await canvasFromFile(f);
+  const shot=c.toDataURL('image/jpeg',.85);
+  const fd=new FormData();
+  fd.append('file',await dataUrlToBlob(shot),'photo.jpg');
+  const r=await api('/api/projects/'+encodeURIComponent(proj)+'/photos',{method:'POST',body:fd});
+  const j=await r.json();
+  if(!r.ok){camMsg('❌ خطا: '+(j.detail||''));return;}
+  const ghostOn=document.getElementById('ghostToggleF')&&document.getElementById('ghostToggleF').checked;
+  if(!ghostOn){
+   try{localStorage.setItem('bt_ref',shot);}catch(e){}
+   const g=document.getElementById('ghostF');
+   if(g){g.src=shot;g.style.display='block';}
+   const gt=document.getElementById('ghostToggleF');
+   if(gt)gt.checked=true;
+   drawGrid();updateShutterLock();
+   camMsg('✅ ثبت شد: '+j.photo.at.fa+' — عکس بعدی روی این مرجع منطبق شود');
+  }else{
+   camMsg('✅ ثبت شد: '+j.photo.at.fa+' — '+j.photo.file);
+  }
+  await refreshProjectLists();
+  document.getElementById('projSel').value=proj;
+ }catch(e){camMsg('❌ '+(e.message||'خطا در پردازش تصویر'));}
+ finally{camBusy=false;if(btn)btn.classList.remove('busy');}
+}
+/* دکمه «از گالری گوشی»: input file بدون capture (هر عکسی از گوشی) */
+function pickPhoneGalleryF(){
+ const proj=currentProject();
+ if(!proj){document.getElementById('projmsg').textContent='⚠️ اول پروژه را انتخاب کن یا بساز!';tab(1);return;}
+ if(!can('camera')){alert('شما دسترسی تصویربرداری ندارید');return;}
+ const inp=document.getElementById('nativeGalInput');
+ if(!inp){alert('مسیر گالری گوشی آماده نیست');return;}
+ inp.value='';
+ inp.click();
+}
+async function pickPhoneGalleryChanged(ev){
+ const f=ev.target.files&&ev.target.files[0];
+ if(!f)return;
+ const proj=currentProject();
+ if(!proj){camMsg('⚠️ پروژه انتخاب نشده');return;}
+ camBusy=true;
+ camMsg('⏳ در حال پردازش عکس گالری...');
+ try{
+  const c=await canvasFromFile(f);
+  const shot=c.toDataURL('image/jpeg',.85);
+  const fd=new FormData();
+  fd.append('file',await dataUrlToBlob(shot),'photo.jpg');
+  const r=await api('/api/projects/'+encodeURIComponent(proj)+'/photos',{method:'POST',body:fd});
+  const j=await r.json();
+  if(!r.ok){camMsg('❌ خطا: '+(j.detail||''));return;}
+  camMsg('✅ ثبت شد: '+j.photo.at.fa+' — '+j.photo.file);
+  await refreshProjectLists();
+  document.getElementById('projSel').value=proj;
+ }catch(e){camMsg('❌ '+(e.message||'خطا در پردازش تصویر'));}
+ finally{camBusy=false;}
+}
+/* --- مسیر عکس‌برداری واقعی گوشی (ImageCapture) برای دوربین زنده ---
+   در اندروید کروم takePhoto() از مسیر کامل عکس‌برداری گوشی می‌گذرد (OIS/EIS، فوکوس
+   خودکار، HDR)؛ روی آیفون وجود ندارد و به frameF برمی‌گردد. */
+let imgCapture=null;
+function buildImageCapture(){
+ try{
+  const t=stream&&stream.getVideoTracks()[0];
+  if(t&&typeof ImageCapture!=='undefined'&&window.ImageCapture){imgCapture=new ImageCapture(t);}
+  else imgCapture=null;
+ }catch(e){imgCapture=null;}
+}
+async function tryTakePhoto(){
+ try{
+  if(!imgCapture)return null;
+  const blob=await imgCapture.takePhoto();
+  if(!blob)return null;
+  const img=await new Promise((res,rej)=>{const el=new Image();el.onload=()=>res(el);el.onerror=rej;el.src=URL.createObjectURL(blob);});
+  const c=frameCanvas(img,1280);
+  URL.revokeObjectURL(img.src);
+  return c?c.toDataURL('image/jpeg',.85):null;
+ }catch(e){return null;}
+}
 async function shootF(){
  if(camBusy)return;
  if(!stream){camMsg('⚠️ دوربین آماده نیست');return;}
  const proj=currentProject();
  if(!proj){camMsg('⚠️ پروژه انتخاب نشده');return;}
+ // قفل شاتر: اگر گوشی تکان می‌خورد، ثبت نکن
+ if(motion&&!phoneIsStill()){
+  camMsg('🤚 گوشی تکان می‌خورد — ثابت نگه‌دار و دوباره بزن');
+  return;
+ }
  const ghostOn=document.getElementById('ghostToggleF')&&document.getElementById('ghostToggleF').checked;
  if(!ghostOn)camMsg('ℹ️ بدون شبه — برای تطبیق زاویه بعدی، شبه را فعال کن');
  camBusy=true;
  const btn=document.getElementById('shutter');if(btn)btn.classList.add('busy');
  camMsg('⏳ در حال ثبت...');
  try{
-  const shot=frameF(1280);
+  const shot=await tryTakePhoto()||frameF(1280);
+  if(!shot){camMsg('❌ خطا: ثبت تصویر ممکن نشد');return;}
   const fd=new FormData();
   fd.append('file',await dataUrlToBlob(shot),'photo.jpg');
   const r=await api('/api/projects/'+encodeURIComponent(proj)+'/photos',{method:'POST',body:fd});
@@ -1213,10 +1391,10 @@ async function makeReport(fmt){
   h+=`<div class="card"><h3>خلاصه تغییرات</h3>
   <p>مساحت ${a.scoped?'نقاط انتخابی':'نیمرخ'}: <b class="${cls(a.area_px.change_pct)}">${chgTxt(a.area_px)}</b></p>`;
   if(a.scoped){
-   h+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${chgTxt(a.volume_proxy_px3)}</b></p></div>`;
+   h+=`</div>`;
   }else{
    h+=`<p>پهنا: <b class="${cls(a.bbox_px.width_change_pct)}">${a.bbox_px.width_change_pct}٪</b> | ارتفاع: <b class="${cls(a.bbox_px.height_change_pct)}">${a.bbox_px.height_change_pct}٪</b></p>
-   <p>حجم تخمینی: <b class="${cls(a.volume_proxy_px3.change_pct)}">${a.volume_proxy_px3.change_pct}٪</b></p></div>`;
+   <p>حجم تخمینی حذف شد — بدون سگمنت‌گذاری کامل جسم معنای فیزیکی نداشت.</p></div>`;
    // رشد جهتی فقط برای تحلیل کلی
    h+=`<div class="card"><h3>رشد جهتی</h3><table><tr><th>جهت</th><th>مرجع</th><th>دوم</th><th>تغییر</th></tr>`;
    for(const d of a.directions)h+=`<tr><td>${d.fa}</td><td>${d.before_px}</td><td>${d.after_px}</td><td><b class="${cls(d.change_pct)}">${d.change_pct}٪</b></td></tr>`;
@@ -1239,9 +1417,9 @@ async function makeReport(fmt){
   let pvDataUri=_pvSrc.startsWith('data:')?_pvSrc:(_pvSrc?await toDataUrl(_pvSrc):'');
   let finalDataUri=_ovSrc.startsWith('data:')?_ovSrc:(_ovSrc?await toDataUrl(_ovSrc):'');
   if(pvDataUri)h+=`<div class="card"><h3>عکس همپوشانی — ${_selRegions.size?fa(_selRegions.size)+' نقطه انتخابی از ':''}۱۰ نقطه بیشترین تغییر</h3><img src="${pvDataUri}"><p style="color:#666;font-size:13px">دایره سبز = رشد (+) | دایره قرمز = کاهش (−) — روی شماره ضربه بزن تا انتخاب/لغو شه</p></div>`;
-  else if(overlayDataUri)h+=`<div class="card"><h3>عکس همپوشانی</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
+  else if(overlayDataUri)h+=`<div class="card"><h3>عکس همپوشانی</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = کاهش | قرمز = رشد</p></div>`;
   if(finalDataUri&&finalDataUri!==pvDataUri)h+=`<div class="card"><h3>خروجی نهایی — نتیجه تحلیل</h3><img src="${finalDataUri}"><p style="color:#666;font-size:13px">حلقه سبز ضخیم = نقاط انتخاب‌شده تحلیل‌شده | کادر خاکستری کم‌رنگ = انتخاب‌نشده</p></div>`;
-  else if(overlayDataUri&&overlayDataUri!==pvDataUri)h+=`<div class="card"><h3>خروجی نهایی — نتیجه تحلیل</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = مرجع | قرمز = دوم</p></div>`;
+  else if(overlayDataUri&&overlayDataUri!==pvDataUri)h+=`<div class="card"><h3>خروجی نهایی — نتیجه تحلیل</h3><img src="${overlayDataUri}"><p style="color:#666;font-size:13px">آبی = کاهش | قرمز = رشد</p></div>`;
   if(a.note_fa)h+=`<div class="card"><p>${a.note_fa}</p></div>`;
   // ── تفکیکی نقاط تحلیل‌شده (اعداد واقعی مرجع/دوم داخل هر نقطه) ──
   if(a.scoped&&(a.regions||[]).length){
@@ -1487,8 +1665,7 @@ async function go(){
   document.getElementById('st').textContent='';
   document.getElementById('out').style.display='block';
   let s=`<p>مساحت نقاط انتخابی: <b class="${cls(j.area_px.change_pct)}">${chgTxt(j.area_px)}</b> (${j.area_px.before} ← ${j.area_px.after} px²)</p>`;
-  s+=`<p>حجم تخمینی نقاط انتخابی: <b class="${cls(j.volume_proxy_px3.change_pct)}">${chgTxt(j.volume_proxy_px3)}</b></p>`;
-  if(j.scale)s+=`<p>مساحت: ${j.scale.area_mm2.before} ← ${j.scale.area_mm2.after} mm²<br>حجم تخمینی: ${j.scale.volume_proxy_mm3.before} ← ${j.scale.volume_proxy_mm3.after} mm³</p>`;
+  if(j.scale)s+=`<p>مساحت: ${j.scale.area_mm2.before} ← ${j.scale.area_mm2.after} mm²</p>`;
   document.getElementById('sum').innerHTML=s;
   // جدول هر نقطه
   document.getElementById('regSec').style.display='block';
@@ -1586,6 +1763,9 @@ document.getElementById('liPass').addEventListener('keydown',e=>{if(e.key==='Ent
 checkSession();
 </script>
 <!-- ===== کادر تمامصفحه دوربین (بیرون از تبها) ===== -->
+<!-- مسیرهای جایگزین: برنامه دوربین خود گوشی + گالری گوشی -->
+<input type="file" id="nativeCamInput" accept="image/*" capture="environment" style="display:none" onchange="nativeShootChanged(event)">
+<input type="file" id="nativeGalInput" accept="image/*" style="display:none" onchange="pickPhoneGalleryChanged(event)">
 <div id="camFullscreen" class="">
  <!-- نوار بالا -->
  <div id="camTopbar">
